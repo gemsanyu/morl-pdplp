@@ -3,18 +3,33 @@ import pathlib
 
 import numpy as np
 
+from bpdplp.utils import generate_graph, read_instance, read_road_types, generate_time_windows
+from bpdplp.utils import RANDOM, RANDOMCLUSTER, CLUSTER, CENTRAL
+
+
 class BPDPLP(object):
     def __init__(self, 
                 num_requests=10,
                 num_vehicles=3,
-                planning_time=240,
+                planning_time=120,
+                time_window_length=60,
+                max_capacity=100,
                 graph_seed="barcelona.txt", 
+                distribution=CLUSTER,
+                depot_location=CENTRAL,
+                cluster_delta=1.2,
+                num_cluster=8,
                 instance_name=None) -> None:
         self.num_requests = num_requests
         self.num_nodes = num_requests*2 + 1
         self.num_vehicles = num_vehicles
         self.planning_time = planning_time
-
+        self.time_window_length = time_window_length
+        self.max_capacity = max_capacity
+        self.distribution = distribution
+        self.depot_location = depot_location
+        self.cluster_delta=cluster_delta
+        self.num_cluster = num_cluster
         self.graph_seed = graph_seed
         self.instance_name = instance_name
         if instance_name is None:
@@ -22,57 +37,18 @@ class BPDPLP(object):
         else:
             self.read_instance()
             
+        self.normalize()
+            
     def read_instance(self):
         instance_path = pathlib.Path(".")/"dataset"/(self.instance_name+".txt")
-        road_type_path = pathlib.Path(".")/"dataset"/(self.instance_name+".road_types")
-        with open(instance_path.absolute(), "r") as instance_file:
-            lines = instance_file.readlines()
-            for i in range(11):
-                strings = lines[i].split()
-                if i == 4:
-                    self.num_nodes = int(strings[1])
-                elif i == 7:
-                    self.planning_time = int(strings[1])
-                elif i == 9:
-                    capacity = float((strings[1]))
-                    self.max_capacity = np.asanyarray([capacity]*self.num_vehicles)
-            self.coords = np.zeros((self.num_nodes,2), dtype=np.float32)
-            self.demands = np.zeros((self.num_nodes,), dtype=np.float32)
-            self.time_windows = np.zeros((self.num_nodes,2), dtype=np.float32)
-            self.service_durations = np.zeros((self.num_nodes,), dtype=np.float32)
-            for i in range(11, self.num_nodes+11):
-                strings = lines[i].split()
-                idx = i-11
-                self.coords[idx,0], self.coords[idx,1] = float(strings[1]), float(strings[2])
-                self.demands[idx] = float(strings[3])
-                self.time_windows[idx,0], self.time_windows[idx,1] = strings[4], strings[5]
-                self.service_durations[idx] = strings[6]
-            self.distance_matrix = np.zeros((self.num_nodes,self.num_nodes), dtype=np.float32)
-            for i in range(self.num_nodes+12, 2*self.num_nodes+12):
-                strings = lines[i].split()
-                idx = i-(self.num_nodes+12)
-                for j in range(self.num_nodes):
-                    self.distance_matrix[idx,j] = float(strings[j])
-        road_types = np.zeros((self.num_nodes,self.num_nodes), dtype=np.int8)
-        if not os.path.isfile(road_type_path.absolute()):
-            a = np.random.randint(0,3,size=(self.num_nodes,self.num_nodes), dtype=np.int8)
-            road_types = np.tril(a) + np.tril(a, -1).T
-            with open(road_type_path.absolute(), "w") as road_types_file:
-                for i in range(self.num_nodes):
-                    line = ""
-                    for j in range(self.num_nodes):
-                       line += str(road_types[i,j])+" "
-                    road_types_file.write(line+"\n")
-        else:
-            with open(road_type_path.absolute(), "r") as road_types_file:
-                lines = road_types_file.readlines()
-                for i,line in enumerate(lines):
-                    strings = line.split()
-                    for j in range(self.num_nodes):
-                       road_types[i,j] = int(strings[j])
-            
+        road_types_path = pathlib.Path(".")/"dataset"/(self.instance_name+".road_types")
+        instance = read_instance(instance_path)
+        self.num_nodes, self.planning_time, self.max_capacity, self.coords, self.demands, self.time_windows, self.service_durations, self.distance_matrix = instance
+        self.road_types = read_road_types(road_types_path, self.num_nodes)
+        
         #normalize all
-        self.norm_demands = self.demands / self.max_capacity[0]
+    def normalize(self):
+        self.norm_demands = self.demands / self.max_capacity
         min_coords, max_coords = np.min(self.coords, axis=0, keepdims=True), np.max(self.coords, axis=0, keepdims=True)
         self.norm_coords = (self.coords-min_coords)/(max_coords-min_coords)
         self.norm_time_windows = self.time_windows/self.planning_time
@@ -80,12 +56,18 @@ class BPDPLP(object):
         min_distance, max_distance = np.min(self.distance_matrix), np.max(self.distance_matrix)
         self.norm_distance_matrix = (self.distance_matrix-min_distance)/(max_distance-min_distance)
         
-                
-                
-                      
-                
-
-    def generate_instance(self):
-        graph_path = pathlib.Path(".")/"dataset"/"graphs"/self.graph_seed
-    #     with open(graph_path.absolute(), "r") as graph_file:
             
+    """
+    The L stands for list of candidate nodes as in (Sartori and Buriol, 2020)
+    """
+    def generate_instance(self):
+        self.coords, self.distance_matrix = generate_graph(self.graph_seed, self.num_nodes, self.num_cluster, self.cluster_delta, self.distribution, self.depot_location)
+        self.demands = np.random.random(size=(self.num_nodes))*(0.6*self.max_capacity-10) + 10
+        self.demands = np.floor(self.demands)
+        self.demands[0] = 0
+        self.service_durations = (np.random.randint(3, size=(self.num_nodes))+1)*5
+        self.service_durations[0]=0
+        self.time_windows = generate_time_windows(self.num_requests, self.planning_time, self.time_window_length, self.service_durations, self.distance_matrix)
+        a = np.random.randint(0,3,size=(self.num_nodes, self.num_nodes), dtype=np.int8)
+        road_types = np.tril(a) + np.tril(a, -1).T
+        self.road_types = road_types

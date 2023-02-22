@@ -1,3 +1,5 @@
 dataset/raw*
 *__pycache__*
 *.ipynb_checkpoints*
+*.npz
+*.html
