@@ -1,9 +1,12 @@
-from bpdplp.bpdplp import BPDPLP
+from torch.utils.data import DataLoader
+
+from bpdplp.bpdplp_dataset import BPDPLP_Dataset
 
 def run():
-    # instance_name = "test/bar-n100-1"
-    # BPDPLP(instance_name=instance_name)
-    prob_instance = BPDPLP()
+    dataset = BPDPLP_Dataset(num_requests=20)
+    dl = DataLoader(dataset, batch_size=64, num_workers=4)
+    for i, batch in enumerate(dl):
+        print(i)
 
 if __name__ == "__main__":
     run()
