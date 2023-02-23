@@ -13,7 +13,7 @@ class BPDPLP_Dataset(Dataset):
     def __init__(self,
                  num_samples:int=1000000,
                  num_requests:int = 50,
-                 num_vehicles:int = 2,
+                 num_vehicles_list:List[int] = [1,2,3,5],
                  num_clusters_list:List[int] = [3,4,5,6,7,8],
                  cluster_delta_list:List[float] = [1,1.2,1.6],
                  planning_time_list:List[int] = [240,480],
@@ -26,7 +26,7 @@ class BPDPLP_Dataset(Dataset):
 
         self.num_samples = num_samples
         self.num_requests = num_requests
-        self.num_vehicles = num_vehicles
+        self.num_vehicles_list = num_vehicles_list
         self.num_clusters_list = num_clusters_list
         self.cluster_delta_list = cluster_delta_list
         self.planning_time_list = planning_time_list
@@ -40,7 +40,7 @@ class BPDPLP_Dataset(Dataset):
 
     def __getitem__(self, index):
         num_requests = self.num_requests
-        num_vehicles = self.num_vehicles
+        num_vehicles = random.choice(self.num_vehicles_list)
         num_clusters = random.choice(self.num_clusters_list)
         cluster_delta = random.choice(self.cluster_delta_list)
         planning_time = random.choice(self.planning_time_list)
@@ -61,4 +61,5 @@ class BPDPLP_Dataset(Dataset):
         distance_matrix = torch.from_numpy(instance.distance_matrix)
         norm_distance_matrix = torch.from_numpy(instance.norm_distance_matrix)
         road_types = torch.from_numpy(instance.road_types)
-        return coords, norm_coords, demands, norm_demands, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
+        max_capacity = instance.max_capacity
+        return num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
