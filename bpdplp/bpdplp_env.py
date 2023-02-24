@@ -1,5 +1,30 @@
 import numpy as np
 
+from bpdplp.bpdplp import TIME_HORIZONS, SPEED_PROFILES
+
+def compute_travel_time(from_idx, to_idx, current_time, planning_time, distance_matrix, road_types):
+    time_horizons = TIME_HORIZONS*planning_time
+    speed_profile = SPEED_PROFILES[road_types[from_idx, to_idx]]
+    distance = distance_matrix[from_idx, to_idx]
+    
+    horizon = np.searchsorted(time_horizons, current_time) - 1
+    # horizon = 0
+    # while time_horizons[horizon+1]<current_time:
+    #     horizon += 1
+    temp_time = current_time 
+    while distance > 0:
+        arrived_time = temp_time + distance/speed_profile[horizon]
+        if arrived_time > time_horizons[horizon+1]:
+            distance -= speed_profile[horizon]*(time_horizons[horizon+1]-temp_time)
+            temp_time = time_horizons[horizon+1]
+            horizon+=1
+        else:
+            distance=0
+    travel_time = arrived_time-current_time
+    print(arrived_time)
+    exit()
+    return travel_time    
+
 
 class BPDPLP_Env(object):
     def __init__(self, 
@@ -8,7 +33,8 @@ class BPDPLP_Env(object):
                  coords, 
                  norm_coords, 
                  demands, 
-                 norm_demands, 
+                 norm_demands,
+                 planning_time, 
                  time_windows, 
                  norm_time_windows, 
                  service_durations, 
@@ -25,6 +51,7 @@ class BPDPLP_Env(object):
         self.norm_coords = norm_coords.numpy()
         self.demands = demands.numpy()
         self.norm_demands = norm_demands.numpy()
+        self.planning_time = planning_time.numpy()
         self.time_windows = time_windows.numpy()
         self.norm_time_windows = norm_time_windows.numpy()
         self.service_durations = service_durations.numpy()
@@ -44,8 +71,7 @@ class BPDPLP_Env(object):
         
     def begin(self):
         self.reset()
-        return self.static_features, None, self.feasibility_mask
-        # return self.static_features, self.dynamic_features
+        return self.static_features, self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask
 
     """
     coords, demands, service_durations, time_windows
@@ -62,17 +88,28 @@ class BPDPLP_Env(object):
     """
         current_coords, current_load, current_time
     """
-    # @property
-    # def vehicle_dynamic_features(self):
-        
+    @property
+    def vehicle_dynamic_features(self):
+        current_coords = [self.coords[i, self.current_location_idx[i]] for i in range(self.batch_size)]
+        current_load = [self.current_load[i][:, np.newaxis] for i in range(self.batch_size)]
+        current_time = [self.current_time[i][:, np.newaxis] for i in range(self.batch_size)]
+        features = [np.concatenate([current_coords[i], current_load[i], current_time[i]], axis=1) for i in range(self.batch_size)]
+        return features
     
+
+    """
+        travel_time
+    """
+    @property
+    def node_dynamic_features(self):
+        i = 0
+        compute_travel_time(0, 1, 90, self.planning_time[i], self.distance_matrix[i], self.road_types[i])
+        
 
     @property
     def feasibility_mask(self):
         mask = [np.zeros((self.num_vehicles[i], self.num_nodes), dtype=bool) for i in range(self.batch_size)]
         is_pickup_visited = self.is_node_visited[:,1:self.num_requests+1]
-        is_pickup_visited[0,2] = True
-        self.request_assignment[0,2] = 1
         is_delivery_visited = self.is_node_visited[:,self.num_requests+1:]
         # for pickup, feasible if taken do not make load exceed capacity and not visited yet
         pickup_demands = self.demands[:,1:self.num_requests+1]

@@ -6,6 +6,8 @@ import numpy as np
 from bpdplp.utils import generate_graph, read_instance, read_road_types, generate_time_windows
 from bpdplp.utils import RANDOM, RANDOMCLUSTER, CLUSTER, CENTRAL
 
+TIME_HORIZONS = np.asanyarray([0,0.2,0.3,0.7,0.8,1000], dtype=np.float32)
+SPEED_PROFILES = np.asanyarray([[1.5, 1, 1.67, 1.17, 1.33],[1.17, 0.67, 1.33, 0.83, 1],[1, 0.33, 0.67, 0.5, 0.83]], dtype=np.float32)
 
 class BPDPLP(object):
     def __init__(self, 

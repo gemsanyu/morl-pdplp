@@ -62,4 +62,4 @@ class BPDPLP_Dataset(Dataset):
         norm_distance_matrix = torch.from_numpy(instance.norm_distance_matrix)
         road_types = torch.from_numpy(instance.road_types)
         max_capacity = instance.max_capacity
-        return num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
+        return num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
