@@ -87,7 +87,13 @@ class BPDPLP_Env(object):
         self.is_node_visited = np.zeros((self.batch_size, self.num_nodes), dtype=bool)
         self.is_node_visited[:, 0] = True
         self.request_assignment = np.full((self.batch_size, self.num_requests), -1, dtype=int)
-        
+        self.distance_travelled = [[0]*self.num_vehicles[i] for i in range(self.batch_size)]
+        self.late_penalty = [0]*self.batch_size
+        self.tour_list = [[[]]*self.num_vehicles[i] for i in range(self.batch_size)]
+        self.departure_time_list = [[[]]*self.num_vehicles[i] for i in range(self.batch_size)]
+               
+
+
     def begin(self):
         self.reset()
         return self.static_features, self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask
@@ -163,3 +169,4 @@ class BPDPLP_Env(object):
             mask[i][:,1:self.num_requests+1] = is_pickup_feasible[i]
             mask[i][:,self.num_requests+1:] = is_delivery_feasible[i]
         return mask
+
