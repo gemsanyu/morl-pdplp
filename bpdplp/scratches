@@ -1,0 +1,26 @@
+distances_list = [self.distance_matrix[i, self.current_location_idx[i], :] for i in range(self.batch_size)]
+        current_time_list = [self.current_time[i] for i in range(self.batch_size)]
+        planning_time_list = [np.asanyarray([self.planning_time[i]]*self.num_vehicles[i]) for i in range(self.batch_size)]
+        time_horizon_list = [planning_time_list[i][:,np.newaxis]*TIME_HORIZONS for i in range(self.batch_size)]
+        road_types_list = [self.road_types[i, self.current_location_idx[i], :] for i in range(self.batch_size)]
+        speed_profile_list = [SPEED_PROFILES[road_types_list[i], :] for i in range(self.batch_size)]
+        travel_time_list = []
+        start = time.time()
+        z = 0
+        for i in range(self.batch_size):
+            travel_time_batch = []
+            for k in range(self.num_vehicles[i]):
+                travel_time_vec = []
+                for j in range(self.num_nodes):
+                    distance = distances_list[i][k,j]
+                    current_time = current_time_list[i][k]
+                    time_horizon = time_horizon_list[i][k]
+                    speed_profile = speed_profile_list[i][k,j]
+                    z+=1
+                    travel_time = compute_travel_time(distance, current_time, time_horizon, speed_profile)
+                    travel_time_vec += [travel_time]
+                travel_time_batch += [travel_time_vec]
+            travel_time_list += [np.asanyarray(travel_time_batch)]
+        elapsed = time.time() - start
+        print(elapsed, z)   
+        start = time.time()

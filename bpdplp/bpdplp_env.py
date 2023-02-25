@@ -1,28 +1,46 @@
+import time
+
 import numpy as np
 
 from bpdplp.bpdplp import TIME_HORIZONS, SPEED_PROFILES
 
-def compute_travel_time(from_idx, to_idx, current_time, planning_time, distance_matrix, road_types):
-    time_horizons = TIME_HORIZONS*planning_time
-    speed_profile = SPEED_PROFILES[road_types[from_idx, to_idx]]
-    distance = distance_matrix[from_idx, to_idx]
-    
-    horizon = np.searchsorted(time_horizons, current_time) - 1
+def compute_travel_time_vectorized(distances, current_times, time_horizons, speed_profiles):
+    num_pair = distances.shape[0]
+    pair_idx = np.arange(num_pair)
+    horizons = np.argmax(time_horizons > current_times[:, np.newaxis], axis=1)-1
+    temp_times = current_times
+    is_distance_nonzero = distances > 0
+    i = 0
+    while np.any(distances>0):
+        arrived_time = temp_times + distances/speed_profiles[pair_idx, horizons]
+        is_arrived_time_pass_breakpoint = arrived_time > time_horizons[pair_idx, horizons+1]
+        #is_nonzero_and_not_pass_breakpoint
+        inanpb = np.logical_and(is_distance_nonzero, np.logical_not(is_arrived_time_pass_breakpoint))
+        distances[inanpb] = 0
+        #is_nonzero_and_pass_breakpoint
+        inapb = np.logical_and(is_distance_nonzero, is_arrived_time_pass_breakpoint)
+        distances[inapb] -= speed_profiles[pair_idx[inapb], horizons[inapb]]*(time_horizons[pair_idx[inapb],horizons[inapb]+1]-temp_times[inapb])
+        temp_times[inapb] = time_horizons[pair_idx[inapb],horizons[inapb]+1]
+        horizons[inapb] += 1
+    travel_time = arrived_time - current_times
+    return travel_time
+
+def compute_travel_time(distance, current_time, time_horizon, speed_profile):
+    horizon = np.searchsorted(time_horizon, current_time) - 1
     # horizon = 0
     # while time_horizons[horizon+1]<current_time:
     #     horizon += 1
-    temp_time = current_time 
+    temp_time = current_time
+    arrived_time = temp_time 
     while distance > 0:
         arrived_time = temp_time + distance/speed_profile[horizon]
-        if arrived_time > time_horizons[horizon+1]:
-            distance -= speed_profile[horizon]*(time_horizons[horizon+1]-temp_time)
-            temp_time = time_horizons[horizon+1]
+        if arrived_time > time_horizon[horizon+1]:
+            distance -= speed_profile[horizon]*(time_horizon[horizon+1]-temp_time)
+            temp_time = time_horizon[horizon+1]
             horizon+=1
         else:
             distance=0
     travel_time = arrived_time-current_time
-    print(arrived_time)
-    exit()
     return travel_time    
 
 
@@ -44,6 +62,7 @@ class BPDPLP_Env(object):
                  road_types) -> None:
         
         self.num_vehicles = num_vehicles.numpy()
+        self.num_vehicles_cum = np.insert(np.cumsum(self.num_vehicles),0,0)
         self.max_capacity = max_capacity.numpy()
         self.batch_size, self.num_nodes, _ = coords.shape
         self.num_requests = (self.num_nodes-1)//2
@@ -90,21 +109,38 @@ class BPDPLP_Env(object):
     """
     @property
     def vehicle_dynamic_features(self):
-        current_coords = [self.coords[i, self.current_location_idx[i]] for i in range(self.batch_size)]
-        current_load = [self.current_load[i][:, np.newaxis] for i in range(self.batch_size)]
-        current_time = [self.current_time[i][:, np.newaxis] for i in range(self.batch_size)]
-        features = [np.concatenate([current_coords[i], current_load[i], current_time[i]], axis=1) for i in range(self.batch_size)]
+        norm_current_coords = [self.norm_coords[i, self.current_location_idx[i]] for i in range(self.batch_size)]
+        norm_current_load = [self.current_load[i][:, np.newaxis]/self.max_capacity[i] for i in range(self.batch_size)]
+        norm_current_time = [self.current_time[i][:, np.newaxis]/self.planning_time[i] for i in range(self.batch_size)]
+        features = [np.concatenate([norm_current_coords[i], norm_current_load[i], norm_current_time[i]], axis=1) for i in range(self.batch_size)]
         return features
     
 
+    def get_travel_time(self):
+        distances_list = [self.distance_matrix[i, self.current_location_idx[i], :] for i in range(self.batch_size)]
+        distances_list = np.concatenate(distances_list).flatten()
+        current_time_list = [np.repeat(self.current_time[i][:, np.newaxis], self.num_nodes, axis=1) for i in range(self.batch_size)]
+        current_time_list = np.concatenate(current_time_list).flatten()
+        planning_time_list = [np.asanyarray([self.planning_time[i]]*self.num_vehicles[i]) for i in range(self.batch_size)]
+        time_horizon_list = [planning_time_list[i][:,np.newaxis]*TIME_HORIZONS for i in range(self.batch_size)]
+        time_horizon_list = [np.repeat(time_horizon_list[i][:,np.newaxis,:], self.num_nodes, axis=1) for i in range(self.batch_size)]
+        time_horizon_list = np.concatenate(time_horizon_list).reshape(-1, 6)
+        road_types_list = [self.road_types[i, self.current_location_idx[i], :] for i in range(self.batch_size)]
+        speed_profile_list = [SPEED_PROFILES[road_types_list[i], :] for i in range(self.batch_size)]
+        speed_profile_list = np.concatenate(speed_profile_list).reshape(-1, 5)
+        travel_time_list = compute_travel_time_vectorized(distances_list, current_time_list, time_horizon_list, speed_profile_list)
+        travel_time_list = [travel_time_list[self.num_vehicles_cum[i-1]*self.num_nodes:self.num_vehicles_cum[i]*self.num_nodes] for i in range(1,self.batch_size+1)]
+        travel_time_list = [travel_time_list[i].reshape(self.num_vehicles[i], -1) for i in range(self.batch_size)]
+        return travel_time_list
+        
     """
         travel_time
     """
     @property
     def node_dynamic_features(self):
-        i = 0
-        compute_travel_time(0, 1, 90, self.planning_time[i], self.distance_matrix[i], self.road_types[i])
-        
+        travel_time_list = self.get_travel_time()
+        norm_travel_time_list = [travel_time_list[i]/self.planning_time[i] for i in range(self.batch_size)]
+        return norm_travel_time_list
 
     @property
     def feasibility_mask(self):
