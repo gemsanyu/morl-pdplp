@@ -146,6 +146,7 @@ class BPDPLP_Env(object):
     def node_dynamic_features(self):
         travel_time_list = self.get_travel_time()
         norm_travel_time_list = [travel_time_list[i]/self.planning_time[i] for i in range(self.batch_size)]
+        norm_travel_time_list = [norm_travel_time_list[i][:,:,np.newaxis] for i in range(self.batch_size)]
         return norm_travel_time_list
 
     @property
