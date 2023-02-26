@@ -113,8 +113,8 @@ class Agent(torch.nn.Module):
         action_list = [select_result_list[i][0] for i in range(batch_size)]
         logprob_list = [select_result_list[i][1] for i in range(batch_size)]
         entropy_list = [select_result_list[i][2] for i in range(batch_size)]
-        selected_vec = [action_list[i]/num_nodes for i in range(batch_size)]
-        selected_node = [action_list[i]%num_nodes for i in range(batch_size)] 
+        selected_vec = [int(action_list[i]/num_nodes) for i in range(batch_size)]
+        selected_node = [int(action_list[i]%num_nodes) for i in range(batch_size)] 
         return selected_vec, selected_node, logprob_list, entropy_list
 
     def select(self, probs):

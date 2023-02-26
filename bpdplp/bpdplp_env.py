@@ -171,3 +171,30 @@ class BPDPLP_Env(object):
             mask[i][:,self.num_requests+1:] = is_delivery_feasible[i]
         return mask
 
+    def act(self, batch_idx, selected_vecs, selected_nodes):
+        #just send the vehicle to the node
+        active_batch_size = len(batch_idx)
+        for i in range(active_batch_size):
+            self.service_node_by_vec(batch_idx[i], selected_vecs[i], selected_nodes[i])
+
+    def service_node_by_vec(self, batch_idx, selected_vec, selected_node):
+        vec_current_location = self.current_location_idx[batch_idx][selected_vec]
+        distance = self.distance_matrix[batch_idx, vec_current_location, selected_node]
+        current_time = self.current_time[batch_idx][selected_vec]
+        time_horizon = self.planning_time[batch_idx]*TIME_HORIZONS
+        road_type = self.road_types[batch_idx, vec_current_location, selected_node]
+        speed_profile = SPEED_PROFILES[road_type]
+        travel_time = compute_travel_time(distance, current_time, time_horizon, speed_profile)
+        self.is_node_visited[batch_idx, selected_node] = True
+        self.current_load[batch_idx][selected_vec] += self.demands[batch_idx, selected_node]
+        if selected_node <= self.num_requests:
+            self.request_assignment[batch_idx, selected_node-1] = selected_vec
+        self.tour_list[batch_idx][selected_vec] += [selected_node]
+        self.departure_time_list[batch_idx][selected_vec] += [current_time]
+        self.current_time[batch_idx][selected_vec] += travel_time
+        if self.current_time[batch_idx][selected_vec] <= self.time_windows[batch_idx,selected_node,0]:
+            self.current_time[batch_idx][selected_vec] = self.time_windows[batch_idx,selected_node,0]
+        elif self.current_time[batch_idx][selected_vec] >self.time_windows[batch_idx,selected_node,1]:
+            self.late_penalty[batch_idx][selected_vec]  += (self.current_time[batch_idx][selected_vec]-self.time_windows[batch_idx,selected_node,1])  
+        self.distance_travelled[batch_idx][selected_vec] += travel_time
+        exit()

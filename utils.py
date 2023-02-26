@@ -53,4 +53,6 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
                                         active_feasibility_mask,
                                         param_dict=None)
         selected_vec, selected_node, logprob_list, entropy_list = forward_results
+        env.act(active_batch_idx, selected_vec, selected_node)
+        print(selected_vec,selected_node)
         exit()
