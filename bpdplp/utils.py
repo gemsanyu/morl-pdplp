@@ -122,7 +122,7 @@ def sample_cluster_from_graph(num_nodes, num_cluster, coords, haversine_matrix, 
 
 
 def generate_graph(graph_seed, num_nodes, num_cluster, cluster_delta, distribution, depot_location):
-    coords_L, distance_matrix_L, haversine_matrix_L = read_graph(graph_seed)
+    coords_L, distance_matrix_L, haversine_matrix_L = graph_seed
     num_nodes_L = len(coords_L)
     chosen_nodes_idx = None
     if distribution == RANDOM:
@@ -130,6 +130,7 @@ def generate_graph(graph_seed, num_nodes, num_cluster, cluster_delta, distributi
     elif distribution == RANDOMCLUSTER:
         h = np.random.random()*0.2+0.4
         num_clustered_nodes = int(h*(num_nodes-1))
+        num_cluster = min(num_cluster, num_clustered_nodes)
         num_random_nodes = num_nodes-1-num_clustered_nodes
         clusters = sample_cluster_from_graph(num_clustered_nodes, num_cluster, coords_L, haversine_matrix_L, cluster_delta)
         cluster_nodes_idx = np.concatenate(clusters)

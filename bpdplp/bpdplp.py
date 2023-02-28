@@ -16,7 +16,7 @@ class BPDPLP(object):
                 planning_time=120,
                 time_window_length=60,
                 max_capacity=100,
-                graph_seed="barcelona.txt", 
+                graph_seed=None, 
                 distribution=CLUSTER,
                 depot_location=CENTRAL,
                 cluster_delta=1.2,

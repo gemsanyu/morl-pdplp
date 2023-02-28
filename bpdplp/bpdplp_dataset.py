@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 from bpdplp.bpdplp import BPDPLP
-from bpdplp.utils import RANDOM, RANDOMCLUSTER, CLUSTER, CENTRAL
+from bpdplp.utils import RANDOM, RANDOMCLUSTER, CLUSTER, CENTRAL, read_graph
 
 class BPDPLP_Dataset(Dataset):
     def __init__(self,
@@ -21,6 +21,7 @@ class BPDPLP_Dataset(Dataset):
                  max_capacity_list:List[int] = [100,300],
                  distribution_list:List[int] = [RANDOM, RANDOMCLUSTER, CLUSTER],
                  depot_location_list:List[int] = [RANDOM, CENTRAL],
+                 graph_seed_name_list:List[str] = ["barcelona.txt"]
             ) -> None:
         super(BPDPLP_Dataset, self).__init__()
 
@@ -34,6 +35,7 @@ class BPDPLP_Dataset(Dataset):
         self.max_capacity_list = max_capacity_list
         self.distribution_list = distribution_list
         self.depot_location_list = depot_location_list
+        self.graph_seed_list = [read_graph(graph_seed_name) for graph_seed_name in graph_seed_name_list]
 
     def __len__(self):
         return self.num_samples
@@ -48,7 +50,8 @@ class BPDPLP_Dataset(Dataset):
         max_capacity = random.choice(self.max_capacity_list)
         distribution = random.choice(self.distribution_list)
         depot_location = random.choice(self.depot_location_list)
-        instance = BPDPLP(num_requests, num_vehicles, planning_time, time_window_length, max_capacity, distribution=distribution, depot_location=depot_location, cluster_delta=cluster_delta, num_cluster=num_clusters)
+        graph_seed = random.choice(self.graph_seed_list)
+        instance = BPDPLP(num_requests, num_vehicles, planning_time, time_window_length, max_capacity, graph_seed=graph_seed, distribution=distribution, depot_location=depot_location, cluster_delta=cluster_delta, num_cluster=num_clusters)
         
         coords = torch.from_numpy(instance.coords)
         norm_coords = torch.from_numpy(instance.norm_coords)

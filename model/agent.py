@@ -69,7 +69,7 @@ class Agent(torch.nn.Module):
         total_num_vehicles = np.sum(num_vehicles)
         feasibility_mask = torch.cat(feasibility_mask)
         
-        print("_---------")
+        # print("_---------")
         # prepare the static to be repeated as many as the number of vehicles
         # in each batch size
         glimpse_V_static_list = [glimpse_V_static[:, i].unsqueeze(1).expand((-1,num_vehicles[i],-1,-1)) for i in range(batch_size)]
@@ -127,7 +127,7 @@ class Agent(torch.nn.Module):
         entropy_list = [select_result_list[i][2] for i in range(batch_size)]
         selected_vec = [int(action_list[i]/num_nodes) for i in range(batch_size)]
         selected_node = [int(action_list[i]%num_nodes) for i in range(batch_size)] 
-        print("---------_")
+        # print("---------_")
         return selected_vec, selected_node, logprob_list, entropy_list
 
     def select(self, probs):
