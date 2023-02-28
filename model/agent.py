@@ -123,8 +123,8 @@ class Agent(torch.nn.Module):
         probs = [torch.softmax(logits[i],dim=-1) for i in range(batch_size)]
         select_result_list = [self.select(probs[i]) for i in range(batch_size)]
         action_list = [select_result_list[i][0] for i in range(batch_size)]
-        logprob_list = [select_result_list[i][1] for i in range(batch_size)]
-        entropy_list = [select_result_list[i][2] for i in range(batch_size)]
+        logprob_list = torch.cat([select_result_list[i][1].unsqueeze(0) for i in range(batch_size)])
+        entropy_list = torch.cat([select_result_list[i][2].unsqueeze(0) for i in range(batch_size)])
         selected_vec = [int(action_list[i]/num_nodes) for i in range(batch_size)]
         selected_node = [int(action_list[i]%num_nodes) for i in range(batch_size)] 
         # print("---------_")

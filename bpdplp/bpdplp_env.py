@@ -89,8 +89,9 @@ class BPDPLP_Env(object):
         self.is_node_visited = np.zeros((self.batch_size, self.num_nodes), dtype=bool)
         self.is_node_visited[:, 0] = True
         self.request_assignment = np.full((self.batch_size, self.num_requests), -1, dtype=int)
-        self.distance_travelled = [[0 for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
+        self.travel_cost = [[0 for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.late_penalty = [[0 for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
+        self.arrived_time = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.tour_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.departure_time_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
                
@@ -249,10 +250,31 @@ class BPDPLP_Env(object):
             self.current_time[batch_idx][selected_vec] = self.time_windows[batch_idx,selected_node,0]
         elif self.current_time[batch_idx][selected_vec] >self.time_windows[batch_idx,selected_node,1]:
             self.late_penalty[batch_idx][selected_vec]  += (self.current_time[batch_idx][selected_vec]-self.time_windows[batch_idx,selected_node,1])  
-        self.distance_travelled[batch_idx][selected_vec] += travel_time
+        self.arrived_time[batch_idx][selected_vec] += [self.current_time[batch_idx][selected_vec]]
+        self.travel_cost[batch_idx][selected_vec] += travel_time
         self.current_location_idx[batch_idx][selected_vec] = selected_node
         # after arriving, and start service, add service time to current time
         self.current_time[batch_idx][selected_vec] += self.service_durations[batch_idx, selected_node]
 
     def get_state(self):
         return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 
+
+    """
+        should we return the batch-wise results already here?
+        i think so
+        NOTES:
+        previously, the time travelled from the last location visited back
+        to the depot is not added, now time to add it
+        i think that's it,,
+        the late penalty back to depot is not considered, or
+        will it be considered? 
+    """
+    def finish(self):
+        travel_time = self.get_travel_time()
+        for i in range(self.batch_size):
+            for k in range(self.num_vehicles[i]):
+                self.travel_cost[i][k] += travel_time[i][k,0]
+        #batch-wise travel cost and penalty
+        travel_cost = np.concatenate([np.asanyarray(self.travel_cost[i]).sum(keepdims=True) for i in range(self.batch_size)])
+        late_penalty = np.concatenate([np.asanyarray(self.late_penalty[i]).sum(keepdims=True) for i in range(self.batch_size)])
+        return self.tour_list, self.arrived_time, self.departure_time_list, travel_cost, late_penalty
