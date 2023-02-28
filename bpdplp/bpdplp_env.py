@@ -81,14 +81,14 @@ class BPDPLP_Env(object):
         self.reset()
 
     def reset(self):
-        self.current_load = [np.asanyarray([0]*self.num_vehicles[i], dtype=np.float32) for i in range(self.batch_size)]
-        self.current_time = [np.asanyarray([0]*self.num_vehicles[i], dtype=np.float32) for i in range(self.batch_size)]
-        self.current_location_idx = [np.asanyarray([0]*self.num_vehicles[i], dtype=int) for i in range(self.batch_size)]
+        self.current_load = [np.asanyarray([0 for j in range(self.num_vehicles[i])], dtype=np.float32) for i in range(self.batch_size)]
+        self.current_time = [np.asanyarray([0 for j in range(self.num_vehicles[i])], dtype=np.float32) for i in range(self.batch_size)]
+        self.current_location_idx = [np.asanyarray([0 for j in range(self.num_vehicles[i])], dtype=int) for i in range(self.batch_size)]
         self.is_node_visited = np.zeros((self.batch_size, self.num_nodes), dtype=bool)
         self.is_node_visited[:, 0] = True
         self.request_assignment = np.full((self.batch_size, self.num_requests), -1, dtype=int)
-        self.distance_travelled = [[0]*self.num_vehicles[i] for i in range(self.batch_size)]
-        self.late_penalty = [[0]*self.num_vehicles[i] for i in range(self.batch_size)]
+        self.distance_travelled = [[0 for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
+        self.late_penalty = [[0 for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.tour_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.departure_time_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
                
