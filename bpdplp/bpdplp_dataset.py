@@ -36,23 +36,25 @@ class BPDPLP_Dataset(Dataset):
         self.distribution_list = distribution_list
         self.depot_location_list = depot_location_list
         self.graph_seed_list = [read_graph(graph_seed_name) for graph_seed_name in graph_seed_name_list]
+        self.config_list = [(num_requests,nv,nc,cd,pt,twl,mc,d,dl,graph_seed) for nv in num_vehicles_list for nc in num_clusters_list for cd in cluster_delta_list for pt in planning_time_list for twl in time_window_length_list for mc in max_capacity_list for d in distribution_list for dl in depot_location_list for graph_seed in self.graph_seed_list]
+
 
     def __len__(self):
         return self.num_samples
 
     def __getitem__(self, index):
-        num_requests = self.num_requests
-        num_vehicles = random.choice(self.num_vehicles_list)
-        num_clusters = random.choice(self.num_clusters_list)
-        cluster_delta = random.choice(self.cluster_delta_list)
-        planning_time = random.choice(self.planning_time_list)
-        time_window_length = random.choice(self.time_window_length_list)
-        max_capacity = random.choice(self.max_capacity_list)
-        distribution = random.choice(self.distribution_list)
-        depot_location = random.choice(self.depot_location_list)
-        graph_seed = random.choice(self.graph_seed_list)
-        instance = BPDPLP(num_requests, num_vehicles, planning_time, time_window_length, max_capacity, graph_seed=graph_seed, distribution=distribution, depot_location=depot_location, cluster_delta=cluster_delta, num_cluster=num_clusters)
-        
+        config = self.config_list[index%len(self.config_list)]
+        nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed = config
+        instance = BPDPLP(num_requests=nr,
+                          num_vehicles=nv,
+                          num_cluster=nc,
+                          cluster_delta=cd,
+                          planning_time=pt,
+                          time_window_length=twl,
+                          max_capacity=mc,
+                          distribution=d,
+                          depot_location=dl,
+                          graph_seed=graph_seed)
         coords = torch.from_numpy(instance.coords)
         norm_coords = torch.from_numpy(instance.norm_coords)
         demands = torch.from_numpy(instance.demands)
@@ -65,4 +67,4 @@ class BPDPLP_Dataset(Dataset):
         norm_distance_matrix = torch.from_numpy(instance.norm_distance_matrix)
         road_types = torch.from_numpy(instance.road_types)
         max_capacity = instance.max_capacity
-        return num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
+        return nv, max_capacity, coords, norm_coords, demands, norm_demands, pt, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
