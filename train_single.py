@@ -23,7 +23,7 @@ def setup() -> Agent:
 def run():
     agent = setup()
     dataset = BPDPLP_Dataset(num_requests=8, num_vehicles_list=[4])
-    dl = DataLoader(dataset, batch_size=1)
+    dl = DataLoader(dataset, batch_size=64)
     for i, batch in enumerate(dl):
         num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
         env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
