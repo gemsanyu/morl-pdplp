@@ -88,9 +88,9 @@ class BPDPLP_Env(object):
         self.is_node_visited[:, 0] = True
         self.request_assignment = np.full((self.batch_size, self.num_requests), -1, dtype=int)
         self.distance_travelled = [[0]*self.num_vehicles[i] for i in range(self.batch_size)]
-        self.late_penalty = [0]*self.batch_size
-        self.tour_list = [[[]]*self.num_vehicles[i] for i in range(self.batch_size)]
-        self.departure_time_list = [[[]]*self.num_vehicles[i] for i in range(self.batch_size)]
+        self.late_penalty = [[0]*self.num_vehicles[i] for i in range(self.batch_size)]
+        self.tour_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
+        self.departure_time_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
                
 
 
@@ -158,14 +158,19 @@ class BPDPLP_Env(object):
         pickup_demands = self.demands[:,1:self.num_requests+1]
         current_load_if_pickup = [self.current_load[i][:, np.newaxis] + pickup_demands[i,:] for i in range(self.batch_size) ]
         is_pickup_exceed_load = [current_load_if_pickup[i]>self.max_capacity[i] for i in range(self.batch_size)]
+        
         is_pickup_feasible = [np.logical_and(np.logical_not(is_pickup_visited[np.newaxis,i,:]), np.logical_not(is_pickup_exceed_load[i])) for i in range(self.batch_size)]
+        
         # for delivery, feasible for the k-th vehicle 
         # if pickup is visited, and is assigned to the k-th vehicle
         # and it is not visited yet
         is_assigned_to_vec = [self.request_assignment[i][np.newaxis, :] == np.arange(self.num_vehicles[i])[:, np.newaxis] for i in range(self.batch_size)]
         is_delivery_feasible = [np.logical_and(is_pickup_visited[np.newaxis, i], np.logical_not(is_delivery_visited[np.newaxis, i])) for i in range(self.batch_size)]
+        
         is_delivery_feasible = [np.repeat(is_delivery_feasible[i],self.num_vehicles[i], axis=0) for i in range(self.batch_size)]
         is_delivery_feasible = [np.logical_and(is_delivery_feasible[i], is_assigned_to_vec[i]) for i in range(self.batch_size)]
+        
+        
         for i in range(self.batch_size):
             mask[i][:,1:self.num_requests+1] = is_pickup_feasible[i]
             mask[i][:,self.num_requests+1:] = is_delivery_feasible[i]
@@ -177,6 +182,12 @@ class BPDPLP_Env(object):
         for i in range(active_batch_size):
             self.service_node_by_vec(batch_idx[i], selected_vecs[i], selected_nodes[i])
 
+
+    """
+        needs to be updated: current location, current time, current load, request assignment
+        solution: tour_list, departure time
+        objective vector: distance travelled, late penalty
+    """
     def service_node_by_vec(self, batch_idx, selected_vec, selected_node):
         vec_current_location = self.current_location_idx[batch_idx][selected_vec]
         distance = self.distance_matrix[batch_idx, vec_current_location, selected_node]
@@ -185,10 +196,16 @@ class BPDPLP_Env(object):
         road_type = self.road_types[batch_idx, vec_current_location, selected_node]
         speed_profile = SPEED_PROFILES[road_type]
         travel_time = compute_travel_time(distance, current_time, time_horizon, speed_profile)
+        assert self.is_node_visited[batch_idx, selected_node] == False 
         self.is_node_visited[batch_idx, selected_node] = True
         self.current_load[batch_idx][selected_vec] += self.demands[batch_idx, selected_node]
+        assert self.current_load[batch_idx][selected_vec] >=0
+        assert self.current_load[batch_idx][selected_vec] <= self.max_capacity[batch_idx]
         if selected_node <= self.num_requests:
+            assert self.request_assignment[batch_idx, selected_node-1] == -1
             self.request_assignment[batch_idx, selected_node-1] = selected_vec
+        else:
+            assert self.request_assignment[batch_idx, selected_node-1-self.num_requests] == selected_vec 
         self.tour_list[batch_idx][selected_vec] += [selected_node]
         self.departure_time_list[batch_idx][selected_vec] += [current_time]
         self.current_time[batch_idx][selected_vec] += travel_time
@@ -197,4 +214,8 @@ class BPDPLP_Env(object):
         elif self.current_time[batch_idx][selected_vec] >self.time_windows[batch_idx,selected_node,1]:
             self.late_penalty[batch_idx][selected_vec]  += (self.current_time[batch_idx][selected_vec]-self.time_windows[batch_idx,selected_node,1])  
         self.distance_travelled[batch_idx][selected_vec] += travel_time
-        exit()
+        # after arriving, and start service, add service time to current time
+        self.current_time[batch_idx][selected_vec] += self.service_durations[batch_idx, selected_node]
+
+    def get_state(self):
+        return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 

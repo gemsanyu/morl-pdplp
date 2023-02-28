@@ -67,6 +67,7 @@ class BPDPLP(object):
         self.demands = np.random.random(size=(self.num_nodes))*(0.6*self.max_capacity-10) + 10
         self.demands = np.floor(self.demands)
         self.demands[0] = 0
+        self.demands[self.num_requests+1:] = -self.demands[1:self.num_requests+1]
         self.service_durations = (np.random.randint(3, size=(self.num_nodes))+1)*5
         self.service_durations[0]=0
         self.time_windows = generate_time_windows(self.num_requests, self.planning_time, self.time_window_length, self.service_durations, self.distance_matrix)

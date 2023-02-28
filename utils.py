@@ -31,6 +31,7 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
 
     active_batch_idx = np.asanyarray([i for i in range(batch_size) if torch.any(feasibility_mask[i])])
     while len(active_batch_idx) > 0:
+        print([torch.any(feasibility_mask[i]) for i in range(batch_size)])   
         active_prev_node_embeddings = [node_embeddings[i,env.current_location_idx[i],:] for i in active_batch_idx]
         active_node_embeddings = node_embeddings[active_batch_idx]
         active_node_dynamic_features = [node_dynamic_features[i] for i in active_batch_idx]
@@ -54,5 +55,14 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
                                         param_dict=None)
         selected_vec, selected_node, logprob_list, entropy_list = forward_results
         env.act(active_batch_idx, selected_vec, selected_node)
-        print(selected_vec,selected_node)
-        exit()
+        # print(env.tour_list)
+        # print(env.departure_time_list)
+        vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
+        vehicle_dynamic_features = [torch.from_numpy(vehicle_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)] 
+        node_dynamic_features = [torch.from_numpy(node_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)]
+        feasibility_mask = [torch.from_numpy(feasibility_mask[i]).to(agent.device) for i in range(env.batch_size)]
+        active_batch_idx = np.asanyarray([i for i in range(batch_size) if torch.any(feasibility_mask[i])])
+        print(selected_vec, selected_node)
+    print(env.tour_list)
+    print(env.departure_time_list)
+    exit()
