@@ -28,7 +28,7 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
     vehicle_dynamic_features = [torch.from_numpy(vehicle_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)] 
     node_dynamic_features = [torch.from_numpy(node_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)]
     feasibility_mask = [torch.from_numpy(feasibility_mask[i]).to(agent.device) for i in range(env.batch_size)]
-
+    num_vehicles = torch.from_numpy(env.num_vehicles).to(dtype=torch.long)
     active_batch_idx = np.asanyarray([i for i in range(batch_size) if torch.any(feasibility_mask[i])])
     while len(active_batch_idx) > 0:
         active_prev_node_embeddings = [node_embeddings[i,env.current_location_idx[i],:] for i in active_batch_idx]
@@ -39,7 +39,7 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
         active_glimpse_K_static = glimpse_K_static[:, active_batch_idx]
         active_logits_K_static = logits_K_static[active_batch_idx]
         active_feasibility_mask = [feasibility_mask[i] for i in active_batch_idx]
-        active_num_vehicles = env.num_vehicles[active_batch_idx]
+        active_num_vehicles = num_vehicles[active_batch_idx]
         active_fixed_context = fixed_context[active_batch_idx]
         forward_results = agent.forward(active_num_vehicles,
                                         active_node_embeddings,
@@ -62,8 +62,4 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
         feasibility_mask = [torch.from_numpy(feasibility_mask[i]).to(agent.device) for i in range(env.batch_size)]
         active_batch_idx = np.asanyarray([i for i in range(batch_size) if torch.any(feasibility_mask[i])])
     tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties = env.finish()
-    print(sum_logprobs)
-    print(sum_entropies)
-    print(travel_costs)
-    print(late_penalties)
-    exit()
+    return tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies

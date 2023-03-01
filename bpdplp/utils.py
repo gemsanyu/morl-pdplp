@@ -2,6 +2,7 @@ import os
 import pathlib
 
 import numpy as np
+import pickle
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import haversine_distances
 
@@ -71,12 +72,14 @@ def read_road_types(road_types_path, num_nodes):
 
 def read_graph(graph_seed):
     # try reading saved numpyz arrays,, it took long to read fromt xt
-    graph_numpy_path = pathlib.Path(".")/"dataset"/"graphs"/(graph_seed+".npz")
-    if os.path.isfile(graph_numpy_path.absolute()):
-        data = np.load(graph_numpy_path.absolute())
-        coords = data["coords"]
-        distance_matrix = data["distance_matrix"]
-        haversine_matrix = data["haversine_matrix"]
+    coords_numpy_path = pathlib.Path(".")/"dataset"/"graphs"/(graph_seed+"_coords.npy")
+    distance_matrix_numpy_path = pathlib.Path(".")/"dataset"/"graphs"/(graph_seed+"_distance_matrix.npy")
+    haversine_matrix_numpy_path = pathlib.Path(".")/"dataset"/"graphs"/(graph_seed+"_haversine_matrix.npy")
+    
+    if os.path.isfile(coords_numpy_path.absolute()):
+        coords = np.load(coords_numpy_path.absolute())
+        distance_matrix = np.load(distance_matrix_numpy_path.absolute())
+        haversine_matrix = np.load(haversine_matrix_numpy_path.absolute())
         return coords, distance_matrix, haversine_matrix
 
     graph_path = pathlib.Path(".")/"dataset"/"graphs"/graph_seed
@@ -84,7 +87,7 @@ def read_graph(graph_seed):
     num_nodes = 0
     coords = None
     distance_matrix = None
-    with open(graph_path.absolute(), "r") as graph_file:
+    with open(graph_path.absolute(), "rb") as graph_file:
         lines = graph_file.readlines()
         num_nodes = int(lines[0].split()[1])
         coords = np.zeros((num_nodes,2), dtype=np.float32)
@@ -101,7 +104,9 @@ def read_graph(graph_seed):
                 distance_matrix[idx,j] = float(strings[j])
     haversine_matrix = haversine_distances(coords)*6371000/1000 # to get kilometer
     # save to numpy
-    np.savez(graph_numpy_path.absolute(), coords=coords, distance_matrix=distance_matrix, haversine_matrix=haversine_matrix) 
+    np.save(coords_numpy_path.absolute(), coords)
+    np.save(distance_matrix_numpy_path.absolute(), distance_matrix)
+    np.save(haversine_matrix_numpy_path.absolute(), haversine_matrix)
     return coords, distance_matrix, haversine_matrix
 
 

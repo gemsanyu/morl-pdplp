@@ -1,5 +1,9 @@
 dataset/raw*
+dataset/training*
+dataset/validation*
 *__pycache__*
 *.ipynb_checkpoints*
 *.npz
 *.html
+runs*
+*.npy

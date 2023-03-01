@@ -33,7 +33,7 @@ def get_parser():
                         help="dataset training num samples")
     parser.add_argument('--num-validation-samples',
                         type=int,
-                        default=1000000,
+                        default=100000,
                         help="dataset validation num samples")
     parser.add_argument('--max-grad-norm',
                         type=int,

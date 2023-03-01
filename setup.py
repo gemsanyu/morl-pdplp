@@ -13,7 +13,8 @@ def setup(args, load_best=False) -> Agent:
                   n_gae_layers=args.n_gae_layers,
                   embed_dim=args.embed_dim,
                   gae_ff_hidden=args.gae_ff_hidden,
-                  tanh_clip=args.tanh_clip)
+                  tanh_clip=args.tanh_clip,
+                  device=args.device)
     opt = torch.optim.Adam(agent.parameters(), lr=args.lr)
     summary_root = "runs"
     summary_dir = pathlib.Path(".")/summary_root

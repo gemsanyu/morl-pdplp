@@ -38,7 +38,7 @@ class BPDPLP(object):
             self.generate_instance()
         else:
             self.read_instance()
-            
+                 
         self.normalize()
             
     def read_instance(self):

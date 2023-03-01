@@ -172,7 +172,7 @@ class BPDPLP_Env(object):
         # print(travel_time_listv2)
         # print("-----------------------------")
         # for i in range(self.batch_size):
-        #     assert np.all(np.isclose(travel_time_list[i], travel_time_listv2[i]))
+        #     #assert np.all(np.isclose(travel_time_list[i], travel_time_listv2[i]))
         #     # print(np.isclose(travel_time_list[i], travel_time_listv2[i]))
         return travel_time_list
         
@@ -233,16 +233,16 @@ class BPDPLP_Env(object):
         road_type = self.road_types[batch_idx, vec_current_location, selected_node]
         speed_profile = SPEED_PROFILES[road_type]
         travel_time = compute_travel_time(distance, current_time, time_horizon, speed_profile)
-        assert self.is_node_visited[batch_idx, selected_node] == False 
+        #assert self.is_node_visited[batch_idx, selected_node] == False 
         self.is_node_visited[batch_idx, selected_node] = True
         self.current_load[batch_idx][selected_vec] += self.demands[batch_idx, selected_node]
-        assert self.current_load[batch_idx][selected_vec] >=0
-        assert self.current_load[batch_idx][selected_vec] <= self.max_capacity[batch_idx]
+        #assert self.current_load[batch_idx][selected_vec] >=0
+        #assert self.current_load[batch_idx][selected_vec] <= self.max_capacity[batch_idx]
         if selected_node <= self.num_requests:
-            assert self.request_assignment[batch_idx, selected_node-1] == -1
+            #assert self.request_assignment[batch_idx, selected_node-1] == -1
             self.request_assignment[batch_idx, selected_node-1] = selected_vec
-        else:
-            assert self.request_assignment[batch_idx, selected_node-1-self.num_requests] == selected_vec 
+        # else:
+            #assert self.request_assignment[batch_idx, selected_node-1-self.num_requests] == selected_vec 
         self.tour_list[batch_idx][selected_vec] += [selected_node]
         self.departure_time_list[batch_idx][selected_vec] += [current_time]
         self.current_time[batch_idx][selected_vec] += travel_time

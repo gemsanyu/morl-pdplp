@@ -1,7 +1,9 @@
+import math
+from typing import Optional
+
 import torch
 import numpy as np
 from torch import nn
-import math
 
 
 class SkipConnection(nn.Module):
@@ -80,7 +82,7 @@ class MultiHeadAttention(nn.Module):
             stdv = 1. / math.sqrt(param.size(-1))
             param.data.uniform_(-stdv, stdv)
 
-    def forward(self, q, h=None, mask=None):
+    def forward(self, q:torch.Tensor, h:Optional[torch.Tensor]=None, mask:Optional[torch.Tensor]=None):
         """
 
         :param q: queries (batch_size, n_query, input_dim)
@@ -305,10 +307,10 @@ class Normalization(nn.Module):
             stdv = 1. / math.sqrt(param.size(-1))
             param.data.uniform_(-stdv, stdv)
 
-    def forward(self, input):
-
+    def forward(self, input:torch.Tensor):
+        batch_size, num_nodes, embed_dim = input.shape
         if isinstance(self.normalizer, nn.BatchNorm1d):
-            return self.normalizer(input.view(-1, input.size(-1))).view(*input.size())
+            return self.normalizer(input.view(-1, input.size(-1))).view(batch_size, num_nodes, embed_dim)
         elif isinstance(self.normalizer, nn.InstanceNorm1d):
             return self.normalizer(input.permute(0, 2, 1)).permute(0, 2, 1)
         else:
@@ -365,7 +367,7 @@ class GraphAttentionEncoder(nn.Module):
             for _ in range(n_layers)
         ))
 
-    def forward(self, x, mask=None):
+    def forward(self, x:torch.Tensor, mask:Optional[torch.Tensor]=None):
 
         assert mask is None, "TODO mask not yet supported!"
 
