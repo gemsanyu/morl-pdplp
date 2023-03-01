@@ -1,5 +1,6 @@
 import random
 import sys
+import time
 
 import numpy as np
 import torch
@@ -69,6 +70,7 @@ def train_one_epoch(args, agent, opt, tb_writer, epoch):
         encode_results = encode(agent, static_features)
         node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
+        
         tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies = solve_results
         obj_list = travel_costs + late_penalties
         agent.eval()

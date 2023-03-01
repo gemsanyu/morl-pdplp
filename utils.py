@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import torch
 
@@ -41,6 +43,7 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
         active_feasibility_mask = [feasibility_mask[i] for i in active_batch_idx]
         active_num_vehicles = num_vehicles[active_batch_idx]
         active_fixed_context = fixed_context[active_batch_idx]
+    
         forward_results = agent.forward(active_num_vehicles,
                                         active_node_embeddings,
                                         active_fixed_context,
@@ -53,7 +56,9 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
                                         active_feasibility_mask,
                                         param_dict=None)
         selected_vec, selected_node, logprob_list, entropy_list = forward_results
+        start = time.time()
         env.act(active_batch_idx, selected_vec, selected_node)
+        end = time.time()
         sum_logprobs[active_batch_idx] += logprob_list
         sum_entropies[active_batch_idx] += entropy_list
         vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
