@@ -213,11 +213,21 @@ class BPDPLP_Env(object):
             mask[i][:,self.num_requests+1:] = is_delivery_feasible[i]
         return mask
 
+    """
+        i think we need to vectorize this, because a lot of it can be...
+        what cannot be vectorized:
+        1. tour list,
+        2. departure time list,
+        3. current time,
+        4. arrived time,
+        5. travel cost,
+        6. current location,
+    """
     def act(self, batch_idx, selected_vecs, selected_nodes):
         #just send the vehicle to the node
-        active_batch_size = len(batch_idx)
-        for i in range(active_batch_size):
-            self.service_node_by_vec(batch_idx[i], selected_vecs[i], selected_nodes[i])
+        selected_nodes = np.asanyarray(selected_nodes)
+        selected_vecs = np.asanyarray(selected_vecs)
+        self.service_node_by_vec(batch_idx, selected_vecs, selected_nodes)
 
 
     """
@@ -225,36 +235,28 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    def service_node_by_vec(self, batch_idx, selected_vec, selected_node):
-        vec_current_location = self.current_location_idx[batch_idx][selected_vec]
-        distance = self.distance_matrix[batch_idx, vec_current_location, selected_node]
-        current_time = self.current_time[batch_idx][selected_vec]
-        time_horizon = self.planning_time[batch_idx]*TIME_HORIZONS
-        road_type = self.road_types[batch_idx, vec_current_location, selected_node]
-        speed_profile = SPEED_PROFILES[road_type]
-        travel_time = compute_travel_time(distance, current_time, time_horizon, speed_profile)
-        #assert self.is_node_visited[batch_idx, selected_node] == False 
-        self.is_node_visited[batch_idx, selected_node] = True
-        self.current_load[batch_idx][selected_vec] += self.demands[batch_idx, selected_node]
-        #assert self.current_load[batch_idx][selected_vec] >=0
-        #assert self.current_load[batch_idx][selected_vec] <= self.max_capacity[batch_idx]
-        if selected_node <= self.num_requests:
-            #assert self.request_assignment[batch_idx, selected_node-1] == -1
-            self.request_assignment[batch_idx, selected_node-1] = selected_vec
-        # else:
-            #assert self.request_assignment[batch_idx, selected_node-1-self.num_requests] == selected_vec 
-        self.tour_list[batch_idx][selected_vec] += [selected_node]
-        self.departure_time_list[batch_idx][selected_vec] += [current_time]
-        self.current_time[batch_idx][selected_vec] += travel_time
-        if self.current_time[batch_idx][selected_vec] <= self.time_windows[batch_idx,selected_node,0]:
-            self.current_time[batch_idx][selected_vec] = self.time_windows[batch_idx,selected_node,0]
-        elif self.current_time[batch_idx][selected_vec] >self.time_windows[batch_idx,selected_node,1]:
-            self.late_penalty[batch_idx][selected_vec]  += (self.current_time[batch_idx][selected_vec]-self.time_windows[batch_idx,selected_node,1])  
-        self.arrived_time[batch_idx][selected_vec] += [self.current_time[batch_idx][selected_vec]]
-        self.travel_cost[batch_idx][selected_vec] += travel_time
-        self.current_location_idx[batch_idx][selected_vec] = selected_node
-        # after arriving, and start service, add service time to current time
-        self.current_time[batch_idx][selected_vec] += self.service_durations[batch_idx, selected_node]
+    def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
+        travel_time_list = self.get_travel_time()
+        travel_time_vecs = [travel_time_list[i][selected_vecs[i], selected_nodes[i]] for i in batch_idx]
+        self.is_node_visited[batch_idx, selected_nodes] = True
+        # isnp -> is_selected_node_pickup
+        # assign the request to the vehicles
+        isnp = selected_nodes <= self.num_requests
+        self.request_assignment[batch_idx[isnp], selected_nodes[isnp]-1] = selected_vecs[isnp]
+        for i in batch_idx:
+            self.current_load[i][selected_vecs[i]] += self.demands[i, selected_nodes[i]]
+            self.tour_list[i][selected_vecs[i]] += [selected_nodes[i]]
+            self.departure_time_list[i][selected_vecs[i]] += [self.current_time[i][selected_vecs[i]]]
+            self.current_time[i][selected_vecs[i]] += travel_time_vecs[i]
+            if self.current_time[i][selected_vecs[i]] <= self.time_windows[i,selected_nodes[i],0]:
+                self.current_time[i][selected_vecs[i]] = self.time_windows[i,selected_nodes[i],0]
+            elif self.current_time[i][selected_vecs[i]] >self.time_windows[i,selected_nodes[i],1]:
+                self.late_penalty[i][selected_vecs[i]]  += float(self.current_time[i][selected_vecs[i]]-self.time_windows[i,selected_nodes[i],1])  
+            self.arrived_time[i][selected_vecs[i]] += [self.current_time[i][selected_vecs[i]]]
+            self.travel_cost[i][selected_vecs[i]] += float(travel_time_vecs[i])
+            self.current_location_idx[i][selected_vecs[i]] = selected_nodes[i]
+            # after arriving, and start service, add service time to current time
+            self.current_time[i][selected_vecs[i]] += self.service_durations[i, selected_nodes[i]]
 
     def get_state(self):
         return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 

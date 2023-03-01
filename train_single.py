@@ -49,7 +49,7 @@ def validate_one_epoch(args, agent, tb_writer, epoch):
         
 def train_one_epoch(args, agent, opt, tb_writer, epoch):
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=3)
     sum_advantage = 0
     sum_training_travel_costs = 0
     sum_training_penalties = 0
