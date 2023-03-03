@@ -1,4 +1,5 @@
-import time
+import os
+import pathlib
 
 import numpy as np
 import torch
@@ -64,3 +65,30 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
         feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device)  
     tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties = env.finish()
     return tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies
+
+def save(agent, agent_opt, validation_score, epoch, title):
+    checkpoint_root = "checkpoints"
+    checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = checkpoint_dir/(title+".pt")
+    checkpoint = {
+        "agent_state_dict":agent.state_dict(),
+        "agent_opt_state_dict":agent_opt.state_dict(),  
+        "validation_score":validation_score,
+        "epoch":epoch,
+    }
+    # save twice to prevent failed saving,,, damn
+    torch.save(checkpoint, checkpoint_path.absolute())
+    checkpoint_backup_path = checkpoint_path.parent /(checkpoint_path.name + "_")
+    torch.save(checkpoint, checkpoint_backup_path.absolute())
+
+    # saving best checkpoint
+    best_checkpoint_path = checkpoint_path.parent /(checkpoint_path.name + "_best")
+    if not os.path.isfile(best_checkpoint_path.absolute()):
+        torch.save(checkpoint, best_checkpoint_path)
+    else:
+        best_checkpoint =  torch.load(best_checkpoint_path.absolute())
+        best_validation_score = best_checkpoint["validation_score"]
+        if best_validation_score < validation_score:
+            torch.save(checkpoint, best_checkpoint_path.absolute())
+   

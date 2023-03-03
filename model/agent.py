@@ -9,8 +9,8 @@ CPU_DEVICE = torch.device("cpu")
 
 from model.graph_encoder import GraphAttentionEncoder
 
-class Agent(torch.jit.ScriptModule):
-# class Agent(torch.nn.Module):
+# class Agent(torch.jit.ScriptModule):
+class Agent(torch.nn.Module):
     def __init__(self,
                  num_node_static_features:int,
                  num_vehicle_dynamic_features:int,
@@ -47,13 +47,22 @@ class Agent(torch.jit.ScriptModule):
         self.project_out = Linear(embed_dim, embed_dim, bias=False)
         self.to(self.device)
         
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def _make_heads(self, x: torch.Tensor)->torch.Tensor:
         x = x.unsqueeze(2).view(x.size(0), x.size(1), self.n_heads, self.key_size)
         x = x.permute(2,0,1,3)
         return x
+    
+    # @torch.jit.script_method
+    def batch_wise_softmax(self, x: torch.Tensor)->torch.Tensor:
+        n_heads, num_vec, _, num_nodes = x.shape
+        x = x.view(n_heads, 1, 1, num_vec*num_nodes)
+        x = torch.softmax(x, dim=-1)
+        x = x.view(n_heads, num_vec, 1, num_nodes)
+        return x
+        
 
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def forward(self,
                 num_vehicles: torch.Tensor,
                 node_embeddings: torch.Tensor,
@@ -93,11 +102,10 @@ class Agent(torch.jit.ScriptModule):
         # tapi attention sebenarnya harus per batch
         # jadi harus diflatten per batch, agar semua vec x customer jadi satu untuk disoftmax
         # lalu nanti di-reshape ulang
-
-        compatibility = [compatibility[:, num_vehicles_cum[i-1]:num_vehicles_cum[i]] for i in range(1,batch_size+1)]
-        attention = [compatibility[i].reshape(self.n_heads,1,1,num_vehicles[i]*num_nodes) for i in range(batch_size)]
-        attention = [torch.softmax(attention[i], dim=-1) for i in range(batch_size)]
-        attention = torch.cat([attention[i].reshape(self.n_heads,num_vehicles[i],1,num_nodes) for i in range(batch_size)], dim=1)
+        # compatibility = [compatibility[:, num_vehicles_cum[i-1]:num_vehicles_cum[i]] for i in range(1,batch_size+1)]
+        attention = torch.zeros_like(compatibility, device=self.device)
+        for i in range(batch_size):
+            attention[:, num_vehicles_cum[i]:num_vehicles_cum[i+1]] = self.batch_wise_softmax(compatibility[:, num_vehicles_cum[i]:num_vehicles_cum[i+1]])
         heads = attention@glimpse_V
         # harus check bener gak yang kayak gini
         # kita concat vehicles across batch
@@ -113,8 +121,8 @@ class Agent(torch.jit.ScriptModule):
         logits = torch.tanh(logits) * self.tanh_clip
         logits = logits.squeeze(1) + feasibility_mask.float().log()
         # now we need to re-split the logits into their respective batch
-        logits = [logits[num_vehicles_cum[i-1]:num_vehicles_cum[i]].flatten() for i in range(1,batch_size+1)]
-        probs = [torch.softmax(logits[i],dim=-1) for i in range(batch_size)]
+        # logits = [logits[num_vehicles_cum[i-1]:num_vehicles_cum[i]].flatten() for i in range(1,batch_size+1)]
+        probs = [torch.softmax(logits[num_vehicles_cum[i]:num_vehicles_cum[i+1]].flatten(),dim=-1) for i in range(batch_size)]
         select_result_list = [self.select(probs[i]) for i in range(batch_size)]
         action_list = [select_result_list[i][0] for i in range(batch_size)]
         logprob_list = torch.cat([select_result_list[i][1].unsqueeze(0) for i in range(batch_size)])
@@ -123,7 +131,7 @@ class Agent(torch.jit.ScriptModule):
         selected_node = [int(action_list[i]%num_nodes) for i in range(batch_size)] 
         return selected_vec, selected_node, logprob_list, entropy_list
 
-    @torch.jit.ignore
+    # @torch.jit.ignore
     def select(self, probs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
         ### Select next to be executed.

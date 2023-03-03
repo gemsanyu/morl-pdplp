@@ -1,19 +1,16 @@
 import random
 import sys
-import time
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from torch.profiler import ProfilerActivity
 from tqdm import tqdm
 
 
 from arguments import get_parser
 from bpdplp.bpdplp_env import BPDPLP_Env
 from bpdplp.bpdplp_dataset import BPDPLP_Dataset
-from model.agent import Agent
-from utils import encode, solve_decode_only
+from utils import encode, solve_decode_only, save
 from setup import setup
 
 def prepare_args():
@@ -45,10 +42,13 @@ def validate_one_epoch(args, agent, tb_writer, epoch):
         sum_validation_penalties += late_penalties.sum()
         sum_validation_entropies += sum_entropies.sum().cpu()
         sum_validation_logprobs += sum_logprobs.sum().cpu()
-    tb_writer.add_scalar("Validation Travel Costs "+args.title, sum_validation_travel_costs/args.num_validation_samples, epoch)
-    tb_writer.add_scalar("Validation Late Penalties "+args.title, sum_validation_penalties/args.num_validation_samples, epoch)
+    mean_validation_travel_costs = sum_validation_travel_costs/args.num_validation_samples
+    mean_penalties = sum_validation_penalties/args.num_validation_samples
+    tb_writer.add_scalar("Validation Travel Costs "+args.title, mean_validation_travel_costs, epoch)
+    tb_writer.add_scalar("Validation Late Penalties "+args.title, mean_penalties, epoch)
     tb_writer.add_scalar("Validation Entropies "+args.title, sum_validation_entropies/args.num_validation_samples, epoch)
-    
+    validation_score = mean_validation_travel_costs + mean_penalties
+    return validation_score
         
 def train_one_epoch(args, agent, opt, tb_writer, epoch):
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
@@ -114,11 +114,12 @@ def run(args):
     agent, opt, tb_writer, last_epoch = setup(args)
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, opt, tb_writer, epoch)
-        validate_one_epoch(args, agent, tb_writer, epoch)
-        
+        validation_score = validate_one_epoch(args, agent, tb_writer, epoch)
+        save(agent, opt, validation_score, epoch, args.title)
+
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(16)
+    torch.set_num_threads(4)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
