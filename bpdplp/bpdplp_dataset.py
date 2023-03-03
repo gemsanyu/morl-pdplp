@@ -44,7 +44,7 @@ class BPDPLP_Dataset(Dataset):
     def __getitem__(self, index):
         config = self.config_list[index%len(self.config_list)]
         nr,nv,nc,cd,pt,twl,mc,d,dl = config
-        idx = index // len(self.config_list)
+        idx = (index // len(self.config_list))%40
         instance_name = "nr_"+str(nr)+"_nv_"+str(nv)+"_nc_"+str(nc)+"_cd_"+str(cd)+"_pt_"+str(pt)+"_twl_"+str(twl)+"_mc_"+str(mc)+"_d_"+str(d)+"_dl_"+str(dl)+"_idx_"+str(idx)
         data_path = pathlib.Path(".")/"dataset"/self.mode/(instance_name+".npz")
         data = np.load(data_path.absolute())
