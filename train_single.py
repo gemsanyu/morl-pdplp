@@ -112,23 +112,13 @@ def train_one_epoch(args, agent, opt, tb_writer, epoch):
         
 def run(args):
     agent, opt, tb_writer, last_epoch = setup(args)
-    prof = torch.profiler.profile(
-        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/profilingcudafull'),
-        profile_memory=True,
-        record_shapes=True,
-        with_stack=True
-        )
-    prof.start()
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, opt, tb_writer, epoch)
         validate_one_epoch(args, agent, tb_writer, epoch)
-        prof.step()
-    prof.stop()
         
 if __name__ == "__main__":
     args = prepare_args()
+    torch.set_num_threads(16)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
