@@ -58,40 +58,26 @@ class Agent(torch.jit.ScriptModule):
                 num_vehicles: torch.Tensor,
                 node_embeddings: torch.Tensor,
                 fixed_context: torch.Tensor,
-                prev_node_embeddings: List[torch.Tensor],
-                node_dynamic_features: List[torch.Tensor],
-                vehicle_dynamic_features: List[torch.Tensor],
+                prev_node_embeddings: torch.Tensor,
+                node_dynamic_features: torch.Tensor,
+                vehicle_dynamic_features: torch.Tensor,
                 glimpse_V_static: torch.Tensor,
                 glimpse_K_static: torch.Tensor,
                 logit_K_static: torch.Tensor,
-                feasibility_mask: List[torch.Tensor],
+                feasibility_mask: torch.Tensor,
                 param_dict: Optional[Dict[str, torch.Tensor]]=None
                 ):
         batch_size, num_nodes, _ = node_embeddings.shape
         num_vehicles_cum = torch.cat([torch.tensor([0]),torch.cumsum(num_vehicles, dim=0)])
         total_num_vehicles = int(num_vehicles.sum())
-        feasibility_mask = torch.cat(feasibility_mask)
-        # print("_---------")
-        # prepare the static to be repeated as many as the number of vehicles
-        # in each batch size
-        glimpse_V_static_list = [glimpse_V_static[:, i].unsqueeze(1).expand((-1,int(num_vehicles[i]),-1,-1)) for i in range(batch_size)]
-        glimpse_V_static = torch.cat(glimpse_V_static_list, dim=1)
-        glimpse_K_static_list = [glimpse_K_static[:, i].unsqueeze(1).expand((-1,int(num_vehicles[i]),-1,-1)) for i in range(batch_size)]
-        glimpse_K_static = torch.cat(glimpse_K_static_list, dim=1)
-        logit_K_static_list = [logit_K_static[i,:].unsqueeze(0).expand((int(num_vehicles[i]),-1,-1)) for i in range(batch_size)]
-        logit_K_static = torch.cat(logit_K_static_list, dim=0)
-        # now decode
-        current_vehicle_state_list = [torch.cat([prev_node_embeddings[i], vehicle_dynamic_features[i]], dim=1) for i in range(batch_size)]
-        current_vehicle_state = torch.cat(current_vehicle_state_list, dim=0)
-        # repeat fixed context for each vehicle
-        fixed_context = torch.cat([fixed_context[i].unsqueeze(0).expand((int(num_vehicles[i]),-1,-1)) for i in range(batch_size)])
+        current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
         if param_dict is not None:       
             projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"]).unsqueeze(1)
-            node_dynamic_embeddings = F.linear(torch.cat([node_dynamic_features[i] for i in range(batch_size)], dim=0),param_dict["pns_weight"])
+            node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
             glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         else:
             projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state).unsqueeze(1) 
-            node_dynamic_embeddings = self.project_node_state(torch.cat([node_dynamic_features[i] for i in range(batch_size)], dim=0))
+            node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
             glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
         glimpse_K_dynamic = self._make_heads(glimpse_K_dynamic)
@@ -135,7 +121,6 @@ class Agent(torch.jit.ScriptModule):
         entropy_list = torch.cat([select_result_list[i][2].unsqueeze(0) for i in range(batch_size)])
         selected_vec = [int(action_list[i]/num_nodes) for i in range(batch_size)]
         selected_node = [int(action_list[i]%num_nodes) for i in range(batch_size)] 
-        # print("---------_")
         return selected_vec, selected_node, logprob_list, entropy_list
 
     @torch.jit.ignore

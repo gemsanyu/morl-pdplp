@@ -22,49 +22,45 @@ def encode(agent, static_features):
 
 def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static):
     batch_size, num_nodes = env.batch_size, env.num_nodes
+    batch_idx = np.arange(batch_size)
     sum_logprobs = torch.zeros((batch_size,), device=agent.device, dtype=torch.float32)
     sum_entropies = torch.zeros((batch_size,), device=agent.device, dtype=torch.float32)
     
     static_features, vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.begin()
-    static_features = torch.from_numpy(static_features).to(agent.device)
-    vehicle_dynamic_features = [torch.from_numpy(vehicle_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)] 
-    node_dynamic_features = [torch.from_numpy(node_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)]
-    feasibility_mask = [torch.from_numpy(feasibility_mask[i]).to(agent.device) for i in range(env.batch_size)]
+    vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device)
+    node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device)
+    feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device)
     num_vehicles = torch.from_numpy(env.num_vehicles).to(dtype=torch.long)
-    active_batch_idx = np.asanyarray([i for i in range(batch_size) if torch.any(feasibility_mask[i])])
-    while len(active_batch_idx) > 0:
-        active_prev_node_embeddings = [node_embeddings[i,env.current_location_idx[i],:] for i in active_batch_idx]
-        active_node_embeddings = node_embeddings[active_batch_idx]
-        active_node_dynamic_features = [node_dynamic_features[i] for i in active_batch_idx]
-        active_vehicle_dynamic_features = [vehicle_dynamic_features[i] for i in active_batch_idx]
-        active_glimpse_V_static = glimpse_V_static[:, active_batch_idx]
-        active_glimpse_K_static = glimpse_K_static[:, active_batch_idx]
-        active_logits_K_static = logits_K_static[active_batch_idx]
-        active_feasibility_mask = [feasibility_mask[i] for i in active_batch_idx]
-        active_num_vehicles = num_vehicles[active_batch_idx]
-        active_fixed_context = fixed_context[active_batch_idx]
-    
-        forward_results = agent.forward(active_num_vehicles,
-                                        active_node_embeddings,
-                                        active_fixed_context,
-                                        active_prev_node_embeddings,
-                                        active_node_dynamic_features,
-                                        active_vehicle_dynamic_features,
-                                        active_glimpse_V_static,
-                                        active_glimpse_K_static,
-                                        active_logits_K_static,
-                                        active_feasibility_mask,
+    vehicle_batch_idx = np.concatenate([ np.asanyarray([i]*num_vehicles[i]) for i in range(batch_size)])
+    # reshape these accordingly
+    # prepare the static to be repeated as many as the number of vehicles
+    # in each batch size
+    # repeat fixed context for each vehicle    
+    glimpse_V_static = glimpse_V_static[:,vehicle_batch_idx]
+    glimpse_K_static = glimpse_K_static[:,vehicle_batch_idx]
+    logits_K_static = logits_K_static[vehicle_batch_idx]
+    fixed_context = fixed_context[vehicle_batch_idx].unsqueeze(1)
+    while torch.any(feasibility_mask):
+        current_location_idx = np.concatenate([env.current_location_idx[i] for i in range(batch_size)])
+        prev_node_embeddings = node_embeddings[vehicle_batch_idx,current_location_idx,:]
+        forward_results = agent.forward(num_vehicles,
+                                        node_embeddings,
+                                        fixed_context,
+                                        prev_node_embeddings,
+                                        node_dynamic_features,
+                                        vehicle_dynamic_features,
+                                        glimpse_V_static,
+                                        glimpse_K_static,
+                                        logits_K_static,
+                                        feasibility_mask,
                                         param_dict=None)
         selected_vec, selected_node, logprob_list, entropy_list = forward_results
-        start = time.time()
-        env.act(active_batch_idx, selected_vec, selected_node)
-        end = time.time()
-        sum_logprobs[active_batch_idx] += logprob_list
-        sum_entropies[active_batch_idx] += entropy_list
+        env.act(batch_idx, selected_vec, selected_node)
+        sum_logprobs += logprob_list
+        sum_entropies += entropy_list
         vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
-        vehicle_dynamic_features = [torch.from_numpy(vehicle_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)] 
-        node_dynamic_features = [torch.from_numpy(node_dynamic_features[i]).to(agent.device) for i in range(env.batch_size)]
-        feasibility_mask = [torch.from_numpy(feasibility_mask[i]).to(agent.device) for i in range(env.batch_size)]
-        active_batch_idx = np.asanyarray([i for i in range(batch_size) if torch.any(feasibility_mask[i])])
+        vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device)
+        node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device) 
+        feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device)  
     tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties = env.finish()
     return tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies
