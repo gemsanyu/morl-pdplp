@@ -11,7 +11,7 @@ class BPDPLP_Dataset(Dataset):
     def __init__(self,
                  num_samples:int=1000000,
                  num_requests:int = 50,
-                 num_vehicles_list:List[int] = [2],
+                 num_vehicles_list:List[int] = [1,2,3,5],
                  num_clusters_list:List[int] = [3,4,5,6,7,8],
                  cluster_delta_list:List[float] = [1,1.2,1.6],
                  planning_time_list:List[int] = [240,480],
@@ -43,8 +43,10 @@ class BPDPLP_Dataset(Dataset):
 
     def __getitem__(self, index):
         config = self.config_list[index%len(self.config_list)]
+        print(len(self.config_list))
+        exit()
         nr,nv,nc,cd,pt,twl,mc,d,dl = config
-        idx = (index // len(self.config_list))%40
+        idx = ((index-1) // len(self.config_list))
         instance_name = "nr_"+str(nr)+"_nv_"+str(nv)+"_nc_"+str(nc)+"_cd_"+str(cd)+"_pt_"+str(pt)+"_twl_"+str(twl)+"_mc_"+str(mc)+"_d_"+str(d)+"_dl_"+str(dl)+"_idx_"+str(idx)
         data_path = pathlib.Path(".")/"dataset"/self.mode/(instance_name+".npz")
         data = np.load(data_path.absolute())
