@@ -9,8 +9,8 @@ CPU_DEVICE = torch.device("cpu")
 
 from model.graph_encoder import GraphAttentionEncoder
 
-# class Agent(torch.jit.ScriptModule):
-class Agent(torch.nn.Module):
+class Agent(torch.jit.ScriptModule):
+# class Agent(torch.nn.Module):
     def __init__(self,
                  num_node_static_features:int,
                  num_vehicle_dynamic_features:int,
@@ -47,13 +47,13 @@ class Agent(torch.nn.Module):
         self.project_out = Linear(embed_dim, embed_dim, bias=False)
         self.to(self.device)
         
-    # @torch.jit.script_method
+    @torch.jit.script_method
     def _make_heads(self, x: torch.Tensor)->torch.Tensor:
         x = x.unsqueeze(2).view(x.size(0), x.size(1), self.n_heads, self.key_size)
         x = x.permute(2,0,1,3)
         return x
     
-    # @torch.jit.script_method
+    @torch.jit.script_method
     def batch_wise_softmax(self, x: torch.Tensor)->torch.Tensor:
         n_heads, num_vec, _, num_nodes = x.shape
         x = x.view(n_heads, 1, 1, num_vec*num_nodes)
@@ -62,7 +62,7 @@ class Agent(torch.nn.Module):
         return x
         
 
-    # @torch.jit.script_method
+    @torch.jit.script_method
     def forward(self,
                 num_vehicles: torch.Tensor,
                 node_embeddings: torch.Tensor,
@@ -78,7 +78,7 @@ class Agent(torch.nn.Module):
                 ):
         batch_size, num_nodes, _ = node_embeddings.shape
         num_vehicles_cum = torch.cat([torch.tensor([0]),torch.cumsum(num_vehicles, dim=0)])
-        total_num_vehicles = int(num_vehicles.sum())
+        total_num_vehicles = int(num_vehicles_cum[-1])
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
         if param_dict is not None:       
             projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"]).unsqueeze(1)
@@ -131,7 +131,7 @@ class Agent(torch.nn.Module):
         selected_node = [int(action_list[i]%num_nodes) for i in range(batch_size)] 
         return selected_vec, selected_node, logprob_list, entropy_list
 
-    # @torch.jit.ignore
+    @torch.jit.ignore
     def select(self, probs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
         ### Select next to be executed.
