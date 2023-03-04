@@ -26,12 +26,13 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
     batch_idx = np.arange(batch_size)
     sum_logprobs = torch.zeros((batch_size,), device=agent.device, dtype=torch.float32)
     sum_entropies = torch.zeros((batch_size,), device=agent.device, dtype=torch.float32)
-    
     static_features, vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.begin()
     vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device)
     node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device)
     feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device)
     num_vehicles = torch.from_numpy(env.num_vehicles).to(dtype=torch.long)
+    num_vehicles_cum = torch.cat([torch.tensor([0]),torch.cumsum(num_vehicles, dim=0)])
+    total_num_vehicles = int(num_vehicles_cum[-1])
     vehicle_batch_idx = np.concatenate([ np.asanyarray([i]*num_vehicles[i]) for i in range(batch_size)])
     # reshape these accordingly
     # prepare the static to be repeated as many as the number of vehicles
@@ -44,7 +45,8 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
     while torch.any(feasibility_mask):
         current_location_idx = np.concatenate([env.current_location_idx[i] for i in range(batch_size)])
         prev_node_embeddings = node_embeddings[vehicle_batch_idx,current_location_idx,:]
-        forward_results = agent.forward(num_vehicles,
+        forward_results = agent.forward(num_vehicles_cum,
+                                        total_num_vehicles,
                                         node_embeddings,
                                         fixed_context,
                                         prev_node_embeddings,
