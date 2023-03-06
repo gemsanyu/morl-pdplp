@@ -95,7 +95,7 @@ class BPDPLP_Env(object):
         self.arrived_time = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.tour_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.departure_time_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
-        self._mask = np.zeros((self.total_num_vehicles, self.num_nodes), dtype=bool)
+        
         
 
     def begin(self):
@@ -123,7 +123,6 @@ class BPDPLP_Env(object):
         norm_current_load = [self.current_load[i][:, np.newaxis]/self.max_capacity[i] for i in range(self.batch_size)]
         norm_current_time = [self.current_time[i][:, np.newaxis]/self.planning_time[i] for i in range(self.batch_size)]
         features = [np.concatenate([norm_current_coords[i], norm_current_load[i], norm_current_time[i]], axis=1) for i in range(self.batch_size)]
-        features = np.concatenate(features)
         return features
     
 
@@ -187,8 +186,7 @@ class BPDPLP_Env(object):
         travel_time_list = self.get_travel_time()
         norm_travel_time_list = [travel_time_list[i]/self.planning_time[i] for i in range(self.batch_size)]
         norm_travel_time_list = [norm_travel_time_list[i][:,:,np.newaxis] for i in range(self.batch_size)]
-        features = np.concatenate(norm_travel_time_list)
-        return features
+        return norm_travel_time_list
 
     @property
     def feasibility_mask(self):
@@ -210,12 +208,8 @@ class BPDPLP_Env(object):
         is_delivery_feasible = [np.repeat(is_delivery_feasible[i],self.num_vehicles[i], axis=0) for i in range(self.batch_size)]
         is_delivery_feasible = [np.logical_and(is_delivery_feasible[i], is_assigned_to_vec[i]) for i in range(self.batch_size)]
         
-        
-        for i in range(self.batch_size):
-            self._mask[self.num_vehicles_cum[i]:self.num_vehicles_cum[i+1],1:self.num_requests+1] = is_pickup_feasible[i]
-            self._mask[self.num_vehicles_cum[i]:self.num_vehicles_cum[i+1],self.num_requests+1:] = is_delivery_feasible[i]
-        return self._mask
-
+        mask = [np.concatenate([np.asanyarray([[False]]*self.num_vehicles[i]), is_pickup_feasible[i], is_delivery_feasible[i]], axis=1) for i in range(self.batch_size)]
+        return mask
     """
         i think we need to vectorize this, because a lot of it can be...
         what cannot be vectorized:
@@ -228,8 +222,8 @@ class BPDPLP_Env(object):
     """
     def act(self, batch_idx, selected_vecs, selected_nodes):
         #just send the vehicle to the node
-        selected_nodes = np.asanyarray(selected_nodes)
-        selected_vecs = np.asanyarray(selected_vecs)
+        # selected_nodes = np.asanyarray(selected_nodes)
+        # selected_vecs = np.asanyarray(selected_vecs)
         self.service_node_by_vec(batch_idx, selected_vecs, selected_nodes)
 
 

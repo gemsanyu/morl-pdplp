@@ -9,8 +9,8 @@ CPU_DEVICE = torch.device("cpu")
 
 from model.graph_encoder import GraphAttentionEncoder
 
-class Agent(torch.jit.ScriptModule):
-# class Agent(torch.nn.Module):
+# class Agent(torch.jit.ScriptModule):
+class Agent(torch.nn.Module):
     def __init__(self,
                  num_node_static_features:int,
                  num_vehicle_dynamic_features:int,
@@ -47,25 +47,23 @@ class Agent(torch.jit.ScriptModule):
         self.project_out = Linear(embed_dim, embed_dim, bias=False)
         self.to(self.device)
         
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def _make_heads(self, x: torch.Tensor)->torch.Tensor:
         x = x.unsqueeze(2).view(x.size(0), x.size(1), self.n_heads, self.key_size)
         x = x.permute(2,0,1,3)
         return x
     
-    @torch.jit.script_method
-    def batch_wise_softmax(self, x: torch.Tensor)->torch.Tensor:
-        n_heads, num_vec, _, num_nodes = x.shape
-        x = x.view(n_heads, 1, 1, num_vec*num_nodes)
-        x = torch.softmax(x, dim=-1)
-        x = x.view(n_heads, num_vec, 1, num_nodes)
-        return x
+    # @torch.jit.script_method
+    # def batch_wise_softmax(self, x: torch.Tensor)->torch.Tensor:
+    #     n_heads, num_vec, _, num_nodes = x.shape
+    #     x = x.view(n_heads, 1, 1, num_vec*num_nodes)
+    #     x = torch.softmax(x, dim=-1)
+    #     x = x.view(n_heads, num_vec, 1, num_nodes)
+    #     return x
         
 
-    @torch.jit.script_method
+    # @torch.jit.script_method
     def forward(self,
-                num_vehicles_cum: torch.Tensor,
-                total_num_vehicles: int,
                 node_embeddings: torch.Tensor,
                 fixed_context: torch.Tensor,
                 prev_node_embeddings: torch.Tensor,
@@ -78,59 +76,63 @@ class Agent(torch.jit.ScriptModule):
                 param_dict: Optional[Dict[str, torch.Tensor]]=None
                 ):
         batch_size, num_nodes, _ = node_embeddings.shape
+        _, num_vehicles, _ = vehicle_dynamic_features.shape
+        n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
         if param_dict is not None:       
-            projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"]).unsqueeze(1)
+            projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
             node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
             glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         else:
-            projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state).unsqueeze(1) 
+            projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
             node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
             glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
+        glimpse_V_dynamic = glimpse_V_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
+        glimpse_K_dynamic = glimpse_K_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_K_dynamic = self._make_heads(glimpse_K_dynamic)
+        glimpse_K_dynamic = glimpse_K_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
+        
+        glimpse_V_static = glimpse_V_static.unsqueeze(2).expand_as(glimpse_V_dynamic)
+        glimpse_K_static = glimpse_K_static.unsqueeze(2).expand_as(glimpse_K_dynamic)
+        logit_K_static = logit_K_static.unsqueeze(1).expand_as(logit_K_dynamic)
+        
         glimpse_V = glimpse_V_static + glimpse_V_dynamic
         glimpse_K = glimpse_K_static + glimpse_K_dynamic
         logit_K = logit_K_static + logit_K_dynamic
-        query = fixed_context + projected_current_vehicle_state
-        glimpse_Q = query.view(total_num_vehicles, self.n_heads, 1, self.key_size)
-        glimpse_Q = glimpse_Q.permute(1,0,2,3).contiguous()
-        compatibility = glimpse_Q@glimpse_K.permute(0,1,3,2).contiguous() / math.sqrt(glimpse_Q.size(-1)) # glimpse_K => n_heads, batch_size, num_items, embed_dim
-        compatibility = compatibility + feasibility_mask.unsqueeze(0).unsqueeze(2).float().log()
+        query = fixed_context.unsqueeze(1) + projected_current_vehicle_state
+        glimpse_Q = query.view(batch_size, num_vehicles, n_heads, 1, key_size)
+        glimpse_Q = glimpse_Q.permute(2,0,1,3,4).contiguous()
+        compatibility = glimpse_Q@glimpse_K.permute(0,1,2,4,3).contiguous() / math.sqrt(glimpse_Q.size(-1)) # glimpse_K => n_heads, batch_size, num_items, embed_dim
+        compatibility = compatibility + feasibility_mask.unsqueeze(0).unsqueeze(3).float().log()
+        
         # ini compatibility per vehicle untuk semua nodes
         # tapi attention sebenarnya harus per batch
         # jadi harus diflatten per batch, agar semua vec x customer jadi satu untuk disoftmax
-        # lalu nanti di-reshape ulang
-        # compatibility = [compatibility[:, num_vehicles_cum[i-1]:num_vehicles_cum[i]] for i in range(1,batch_size+1)]
-        attention = torch.zeros_like(compatibility, device=self.device)
-        for i in range(batch_size):
-            attention[:, num_vehicles_cum[i]:num_vehicles_cum[i+1]] = self.batch_wise_softmax(compatibility[:, num_vehicles_cum[i]:num_vehicles_cum[i+1]])
+        attention = torch.softmax(compatibility.view(n_heads,batch_size,num_vehicles*num_nodes),dim=-1).view_as(compatibility)
         heads = attention@glimpse_V
         # harus check bener gak yang kayak gini
         # kita concat vehicles across batch
         # sama kita isolasi per batch, tapi vehicle x nodees diflatten
-        # kalau sama harusnya bener
-        concated_heads = heads.permute(1,2,0,3).contiguous()
-        concated_heads = concated_heads.view(total_num_vehicles, 1, self.embed_dim)
+        # kalau sama harusnya bener     
+        concated_heads = heads.permute(1,2,3,0,4).contiguous()
+        concated_heads = concated_heads.view(batch_size, num_vehicles, 1, self.embed_dim)
         if param_dict is not None:
             final_Q = F.linear(concated_heads, param_dict["po_weight"])
         else:
             final_Q = self.project_out(concated_heads)
-        logits = final_Q@logit_K.permute(0,2,1) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
+        logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
         logits = torch.tanh(logits) * self.tanh_clip
-        logits = logits.squeeze(1) + feasibility_mask.float().log()
-        # now we need to re-split the logits into their respective batch
-        # logits = [logits[num_vehicles_cum[i-1]:num_vehicles_cum[i]].flatten() for i in range(1,batch_size+1)]
-        probs = [torch.softmax(logits[num_vehicles_cum[i]:num_vehicles_cum[i+1]].flatten(),dim=-1) for i in range(batch_size)]
-        select_result_list = [self.select(probs[i]) for i in range(batch_size)]
-        action_list = [select_result_list[i][0] for i in range(batch_size)]
-        logprob_list = torch.cat([select_result_list[i][1].unsqueeze(0) for i in range(batch_size)])
-        entropy_list = torch.cat([select_result_list[i][2].unsqueeze(0) for i in range(batch_size)])
-        selected_vec = [int(action_list[i]/num_nodes) for i in range(batch_size)]
-        selected_node = [int(action_list[i]%num_nodes) for i in range(batch_size)] 
-        return selected_vec, selected_node, logprob_list, entropy_list
+        logits = logits.squeeze(2) + feasibility_mask.float().log()
+        logits = logits.view(batch_size, num_vehicles*num_nodes)
+        probs = torch.softmax(logits, dim=1)
+        op, logprob_list, entropy_list = self.select(probs)
+        selected_vecs = torch.floor(op/num_nodes).to(dtype=torch.long)
+        selected_nodes = op % num_nodes
+        return selected_vecs, selected_nodes, logprob_list, entropy_list
 
-    @torch.jit.ignore
+    # @torch.jit.ignore
     def select(self, probs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
         ### Select next to be executed.

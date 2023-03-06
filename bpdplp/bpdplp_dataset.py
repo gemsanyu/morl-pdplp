@@ -24,6 +24,15 @@ class BPDPLP_Dataset(Dataset):
             ) -> None:
         super(BPDPLP_Dataset, self).__init__()
 
+        # num_vehicles_list = [1,2,3,5]
+        # num_clusters_list = [3]
+        # cluster_delta_list = [1]
+        # planning_time_list = [240]
+        # time_window_length_list = [60]
+        # max_capacity_list = [100]
+        # distribution_list = [RANDOM]
+        # depot_location_list = [RANDOM]
+
         self.num_samples = num_samples
         self.num_requests = num_requests
         self.num_vehicles_list = num_vehicles_list
