@@ -30,10 +30,10 @@ def setup(args, load_best=False) -> Agent:
         checkpoint_path = checkpoint_dir/(args.title+"_best.pt")
     
     checkpoint = None
-    # if os.path.isfile(checkpoint_path.absolute()):
-    #     checkpoint = torch.load(checkpoint_path.absolute(), map_location=args.device)
-    # else:
-    #     print("CHECKPOINT NOT FOUND! new run?")
+    if os.path.isfile(checkpoint_path.absolute()):
+        checkpoint = torch.load(checkpoint_path.absolute(), map_location=args.device)
+    else:
+        print("CHECKPOINT NOT FOUND! new run?")
 
     last_epoch = 0
     if checkpoint is not None:
