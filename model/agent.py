@@ -54,15 +54,6 @@ class Agent(torch.nn.Module):
         return x
     
     # @torch.jit.script_method
-    # def batch_wise_softmax(self, x: torch.Tensor)->torch.Tensor:
-    #     n_heads, num_vec, _, num_nodes = x.shape
-    #     x = x.view(n_heads, 1, 1, num_vec*num_nodes)
-    #     x = torch.softmax(x, dim=-1)
-    #     x = x.view(n_heads, num_vec, 1, num_nodes)
-    #     return x
-        
-
-    # @torch.jit.script_method
     def forward(self,
                 node_embeddings: torch.Tensor,
                 fixed_context: torch.Tensor,
