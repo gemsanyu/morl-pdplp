@@ -95,7 +95,7 @@ class BPDPLP_Env(object):
         self.arrived_time = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.tour_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
         self.departure_time_list = [[[] for j in range(self.num_vehicles[i])] for i in range(self.batch_size)]
-        
+        self.travel_time_list = self.get_travel_time()
         
 
     def begin(self):
@@ -183,7 +183,7 @@ class BPDPLP_Env(object):
     """
     @property
     def node_dynamic_features(self):
-        travel_time_list = self.get_travel_time()
+        travel_time_list = self.travel_time_list
         norm_travel_time_list = [travel_time_list[i]/self.planning_time[i] for i in range(self.batch_size)]
         norm_travel_time_list = [norm_travel_time_list[i][:,:,np.newaxis] for i in range(self.batch_size)]
         return norm_travel_time_list
@@ -233,7 +233,7 @@ class BPDPLP_Env(object):
         objective vector: distance travelled, late penalty
     """
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
-        travel_time_list = self.get_travel_time()
+        travel_time_list = self.travel_time_list
         travel_time_vecs = [travel_time_list[i][selected_vecs[i], selected_nodes[i]] for i in batch_idx]
         self.is_node_visited[batch_idx, selected_nodes] = True
         # isnp -> is_selected_node_pickup
@@ -254,6 +254,8 @@ class BPDPLP_Env(object):
             self.current_location_idx[i][selected_vecs[i]] = selected_nodes[i]
             # after arriving, and start service, add service time to current time
             self.current_time[i][selected_vecs[i]] += self.service_durations[i, selected_nodes[i]]
+            #recompute travel time
+        self.travel_time_list = self.get_travel_time()
 
     def get_state(self):
         return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 

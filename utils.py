@@ -48,8 +48,13 @@ def solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_stat
     num_vehicles_cum = np.concatenate([np.asanyarray([0]),np.cumsum(num_vehicles)])
     vehicle_batch_idx = np.concatenate([ np.asanyarray([i]*num_vehicles[i]) for i in range(batch_size)])
     vehicle_idx = np.concatenate([np.arange(num_vehicles[i]) for i in range(batch_size)])
-    total_num_vehicles = int(num_vehicles_cum[-1])
     
+    # expanding glimpses
+    glimpse_V_static = glimpse_V_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
+    glimpse_K_static = glimpse_K_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
+    logits_K_static = logits_K_static.unsqueeze(1).expand(-1,max_num_vehicles,-1,-1)
+    fixed_context = fixed_context.unsqueeze(1).expand(-1,max_num_vehicles,-1)
+
     # padding feasibility mask and concatenating, ready for torch
     num_vehicle_diffs = max_num_vehicles-num_vehicles
     feasibility_mask = [np.pad(feasibility_mask[i],((0,num_vehicle_diffs[i]),(0,0)))[np.newaxis,:,:] for i in range(batch_size)]

@@ -94,14 +94,10 @@ class Agent(torch.nn.Module):
         glimpse_K_dynamic = self._make_heads(glimpse_K_dynamic)
         glimpse_K_dynamic = glimpse_K_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
         
-        glimpse_V_static = glimpse_V_static.unsqueeze(2).expand_as(glimpse_V_dynamic)
-        glimpse_K_static = glimpse_K_static.unsqueeze(2).expand_as(glimpse_K_dynamic)
-        logit_K_static = logit_K_static.unsqueeze(1).expand_as(logit_K_dynamic)
-        
         glimpse_V = glimpse_V_static + glimpse_V_dynamic
         glimpse_K = glimpse_K_static + glimpse_K_dynamic
         logit_K = logit_K_static + logit_K_dynamic
-        query = fixed_context.unsqueeze(1) + projected_current_vehicle_state
+        query = fixed_context + projected_current_vehicle_state
         glimpse_Q = query.view(batch_size, num_vehicles, n_heads, 1, key_size)
         glimpse_Q = glimpse_Q.permute(2,0,1,3,4).contiguous()
         compatibility = glimpse_Q@glimpse_K.permute(0,1,2,4,3).contiguous() / math.sqrt(glimpse_Q.size(-1)) # glimpse_K => n_heads, batch_size, num_items, embed_dim

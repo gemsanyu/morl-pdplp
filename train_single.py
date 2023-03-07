@@ -20,10 +20,9 @@ def prepare_args():
     return args
 
 @torch.no_grad()
-def validate_one_epoch(args, agent, tb_writer, epoch):
+def validate_one_epoch(args, agent, validation_dataset, tb_writer, epoch):
     agent.eval()
-    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
     sum_validation_travel_costs = 0
     sum_validation_penalties = 0
     sum_validation_entropies = 0
@@ -50,9 +49,8 @@ def validate_one_epoch(args, agent, tb_writer, epoch):
     validation_score = mean_validation_travel_costs + mean_penalties
     return validation_score
         
-def train_one_epoch(args, agent, opt, tb_writer, epoch):
-    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+def train_one_epoch(args, agent, opt, train_dataset, tb_writer, epoch):
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     sum_advantage = 0
     sum_training_travel_costs = 0
     sum_training_penalties = 0
@@ -112,9 +110,12 @@ def train_one_epoch(args, agent, opt, tb_writer, epoch):
         
 def run(args):
     agent, opt, tb_writer, last_epoch = setup(args)
+    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
+    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
+    
     for epoch in range(last_epoch+1, args.max_epoch):
-        train_one_epoch(args, agent, opt, tb_writer, epoch)
-        validation_score = validate_one_epoch(args, agent, tb_writer, epoch)
+        train_one_epoch(args, agent, opt, train_dataset, tb_writer, epoch)
+        validation_score = validate_one_epoch(args, agent, validation_dataset, tb_writer, epoch)
         save(agent, opt, validation_score, epoch, args.title)
 
 if __name__ == "__main__":

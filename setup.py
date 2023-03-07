@@ -37,8 +37,8 @@ def setup(args, load_best=False) -> Agent:
 
     last_epoch = 0
     if checkpoint is not None:
-        agent.load_state_dict(checkpoint["state_dict"])
-        opt.load_state_dict(checkpoint["opt_state_dict"])
+        agent.load_state_dict(checkpoint["agent_state_dict"])
+        opt.load_state_dict(checkpoint["agent_opt_state_dict"])
         last_epoch = checkpoint["epoch"]    
 
     return agent, opt, tb_writer, last_epoch
