@@ -253,8 +253,14 @@ class BPDPLP_Env(object):
         # isnp -> is_selected_node_pickup
         # assign the request to the vehicles
         isnp = selected_nodes <= self.num_requests
+        # not_served = self.request_assignment[batch_idx[isnp], selected_nodes[isnp]-1] == -1
+        # assert np.all(not_served)
         self.request_assignment[batch_idx[isnp], selected_nodes[isnp]-1] = selected_vecs[isnp]
         #add demands
+        # isnd = selected_nodes > self.num_requests
+        # selected_requests = selected_nodes.copy()
+        # selected_requests[isnd] -= self.num_requests
+        # assert np.all(self.request_assignment[batch_idx, selected_requests-1] == selected_vecs)
         selected_nodes_demands = self.demands[batch_idx, selected_nodes]
         self.current_load[batch_idx, selected_vecs] += selected_nodes_demands
         self.num_visited_nodes[batch_idx, selected_vecs] += 1
@@ -303,7 +309,8 @@ class BPDPLP_Env(object):
         # for i in range(self.batch_size):
         #     for k in range(self.num_vehicles[i]):
         #         self.travel_cost[i][k] += travel_time[i][k,0]
-        #batch-wise travel cost and penalty
+        # #batch-wise travel cost and penalty
+        # assert (self.current_load.sum() == 0)
         travel_cost = self.travel_cost.sum(axis=1)
         late_penalty = self.late_penalty.sum(axis=1)
         return self.tour_list, self.arrived_time, self.departure_time_list, travel_cost, late_penalty
