@@ -30,14 +30,23 @@ class Agent(torch.nn.Module):
         self.val_size = self.embed_dim // self.n_heads
         self.key_size = self.val_size
         # embedder
-        self.gae = GraphAttentionEncoder(n_heads=n_heads,
+        self.spatial_other_gae = GraphAttentionEncoder(n_heads=n_heads,
                                          n_layers=n_gae_layers,
                                          embed_dim=embed_dim,
                                          node_dim=None,
                                          feed_forward_hidden=gae_ff_hidden)
-        self.depot_embedder = Linear(num_node_static_features, embed_dim)
-        self.pick_embedder = Linear(2*num_node_static_features, embed_dim)
-        self.delivery_embedder = Linear(num_node_static_features, embed_dim)
+        self.depot_spatial_other_embedder = Linear(num_node_static_features-2, embed_dim)
+        self.pick_spatial_other_embedder = Linear(2*num_node_static_features-4, embed_dim)
+        self.delivery_spatial_other_embedder = Linear(num_node_static_features-2, embed_dim)
+        
+        self.temporal_gae = GraphAttentionEncoder(n_heads=n_heads,
+                                         n_layers=n_gae_layers,
+                                         embed_dim=embed_dim,
+                                         node_dim=2*embed_dim,
+                                         feed_forward_hidden=gae_ff_hidden)
+        self.depot_temporal_embedder = Linear(2, embed_dim)
+        self.pick_temporal_embedder = Linear(4, embed_dim)
+        self.delivery_temporal_embedder = Linear(2, embed_dim)
         
         self.project_embeddings = Linear(embed_dim, 3*embed_dim, bias=False)
         self.project_fixed_context = Linear(embed_dim, embed_dim, bias=False)

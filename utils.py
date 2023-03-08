@@ -5,18 +5,37 @@ import numpy as np
 import torch
 
 from bpdplp.bpdplp_env import BPDPLP_Env
-
-
-def encode(agent, static_features):
+from model.agent import Agent
+# joint TRL Encoder
+# encode spatial+other first
+# then encode time windows + spatial
+def encode(agent:Agent, static_features):
     num_requests = int((static_features.shape[1]-1)//2)
     depot_static_features = static_features[:, 0].unsqueeze(1)
     delivery_static_features = static_features[:,num_requests+1:]
-    pickup_static_features = torch.concat([static_features[:,1:num_requests+1], delivery_static_features], dim=2)
-    depot_init_embedding = agent.depot_embedder(depot_static_features)
-    pickup_init_embedding = agent.pick_embedder(pickup_static_features)
-    delivery_init_embedding = agent.delivery_embedder(delivery_static_features)
-    node_init_embeddings = torch.concat([depot_init_embedding, pickup_init_embedding, delivery_init_embedding], dim=1)
-    node_embeddings, graph_embeddings = agent.gae(node_init_embeddings)
+    pickup_only_static_features = static_features[:,1:num_requests+1]
+    
+    depot_spatial_other_features = depot_static_features[:,:,:4]
+    delivery_spatial_other_features = delivery_static_features[:,:,:4]
+    pickup_spatial_other_features = torch.cat([pickup_only_static_features[:,:,:4], delivery_static_features[:,:,:4]], dim=2) 
+    depot_so_init_embedding = agent.depot_spatial_other_embedder(depot_spatial_other_features)
+    pickup_so_init_embedding = agent.pick_spatial_other_embedder(pickup_spatial_other_features)
+    delivery_so_init_embedding = agent.delivery_spatial_other_embedder(delivery_spatial_other_features)
+    node_so_init_embeddings = torch.cat([depot_so_init_embedding, pickup_so_init_embedding, delivery_so_init_embedding], dim=1)
+    node_so_embeddings, graph_so_embeddings = agent.spatial_other_gae(node_so_init_embeddings)
+    
+    depot_time_windows = depot_static_features[:,:,4:]
+    delivery_time_windows = delivery_static_features[:,:,4:]
+    pickup_time_windows = torch.cat([pickup_only_static_features[:,:,4:], delivery_time_windows], dim=2)
+    depot_temporal_init_embedding = agent.depot_temporal_embedder(depot_time_windows)
+    pickup_temporal_init_embedding = agent.pick_temporal_embedder(pickup_time_windows)
+    delivery_temporal_init_embedding = agent.delivery_temporal_embedder(delivery_time_windows)
+    node_temporal_init_embeddings = torch.cat([depot_temporal_init_embedding, pickup_temporal_init_embedding, delivery_temporal_init_embedding], dim=1)
+    node_init_embeddings = torch.cat([node_so_embeddings, node_temporal_init_embeddings], dim=2)
+    node_temporal_embeddings, graph_temporal_embeddings = agent.temporal_gae(node_init_embeddings)
+    
+    node_embeddings = node_so_embeddings + node_temporal_embeddings
+    graph_embeddings = graph_so_embeddings + graph_temporal_embeddings
     fixed_context = agent.project_fixed_context(graph_embeddings)
     glimpse_K_static, glimpse_V_static, logits_K_static = agent.project_embeddings(node_embeddings).chunk(3, dim=-1)
     glimpse_K_static = agent._make_heads(glimpse_K_static)
