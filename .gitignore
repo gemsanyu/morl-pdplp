@@ -1,6 +1,7 @@
 dataset/raw*
 dataset/training*
 dataset/validation*
+dataset/testing_batch*
 *__pycache__*
 *.ipynb_checkpoints*
 *.npz
