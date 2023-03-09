@@ -116,7 +116,7 @@ def run(args):
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, opt, train_dataset, tb_writer, epoch)
         validation_score = validate_one_epoch(args, agent, validation_dataset, tb_writer, epoch)
-        # save(agent, opt, validation_score, epoch, args.title)
+        save(agent, opt, validation_score, epoch, args.title)
 
 if __name__ == "__main__":
     args = prepare_args()
