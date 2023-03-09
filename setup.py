@@ -6,8 +6,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 def setup(args, load_best=False) -> Agent:
-    agent = Agent(num_node_static_features=6,
-                  num_vehicle_dynamic_features=4,
+    agent = Agent(num_node_static_features=4,
+                  num_vehicle_dynamic_features=2,
                   num_node_dynamic_features=1,
                   n_heads=args.n_heads,
                   n_gae_layers=args.n_gae_layers,
