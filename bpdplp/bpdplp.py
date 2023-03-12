@@ -42,8 +42,8 @@ class BPDPLP(object):
         self.normalize()
             
     def read_instance(self):
-        instance_path = pathlib.Path(".")/"dataset"/(self.instance_name+".txt")
-        road_types_path = pathlib.Path(".")/"dataset"/(self.instance_name+".road_types")
+        instance_path = pathlib.Path(".")/"dataset"/"test"/(self.instance_name+".txt")
+        road_types_path = pathlib.Path(".")/"dataset"/"test"/(self.instance_name+".road_types")
         instance = read_instance(instance_path)
         self.num_nodes, self.planning_time, self.max_capacity, self.coords, self.demands, self.time_windows, self.service_durations, self.distance_matrix = instance
         self.road_types = read_road_types(road_types_path, self.num_nodes)

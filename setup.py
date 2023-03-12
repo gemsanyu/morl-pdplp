@@ -5,7 +5,7 @@ from model.agent import Agent
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-def setup(args, load_best=False) -> Agent:
+def setup(args, load_best=False):
     agent = Agent(num_node_static_features=4,
                   num_vehicle_dynamic_features=2,
                   num_node_dynamic_features=1,
