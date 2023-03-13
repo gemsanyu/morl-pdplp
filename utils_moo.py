@@ -31,17 +31,3 @@ def save_policy(policy, epoch, title):
     checkpoint_backup_path = checkpoint_path.parent /(checkpoint_path.name + "_")
     torch.save(checkpoint, checkpoint_backup_path.absolute())
 
-   
-def save_validator(validator, title):
-    checkpoint_root = "checkpoints"
-    checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_path = checkpoint_dir/(title+"_validator.pt")
-    checkpoint = {
-        "validator":validator,
-    }
-    # save twice to prevent failed saving,,, damn
-    torch.save(checkpoint, checkpoint_path.absolute())
-    checkpoint_backup_path = checkpoint_path.parent /(checkpoint_path.name + "_")
-    torch.save(checkpoint, checkpoint_backup_path.absolute())
-

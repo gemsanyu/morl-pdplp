@@ -1,9 +1,9 @@
-import math
 import random
+import subprocess
 import sys
-import time
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -18,9 +18,10 @@ from policy.policy import Policy
 from policy.utils import get_score_nd_cd, get_score_hv_contributions
 from policy.non_dominated_sorting import fast_non_dominated_sort
 from utils import encode, solve_decode_only, save
-from utils_moo import update_policy, save_policy, save_validator
+from utils_moo import update_policy, save_policy
 from setup_moo import setup_r1nes
 from validator import Validator
+
 
 
 def prepare_args():
@@ -50,7 +51,7 @@ def solve_one_batch(args, agent:Agent, param_dict_list, batch):
 @torch.no_grad()        
 def validate_one_epoch(args, agent:Agent, policy:Policy, validator:Validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
     agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, shuffle=True)
     
     param_dict_list, sample_list = policy.generate_random_parameters(n_sample=args.pop_size, use_antithetic=False)
     f_list = []
@@ -79,31 +80,36 @@ def validate_one_epoch(args, agent:Agent, policy:Policy, validator:Validator, va
         tb_writer.add_scalar("Mean Delta Utopia", last_mean_delta_utopia, validator.epoch)
 
     # test
+    marker_list = [".","o","v","^","<",">","1","2","3","4"]
+    colors_list = [key for key in mcolors.TABLEAU_COLORS.keys()]
+    combination_list = [[c,m] for c in colors_list for m in marker_list]
     param_dict_list, sample_list = policy.generate_random_parameters(n_sample=50, use_antithetic=False)
     test_f_list = solve_one_batch(args, agent, param_dict_list, test_batch)
-    # print(test_f_list)
     plt.figure()
-    # plt.xlim((0,1000))
-    # plt.ylim((0,10000))
-    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1])
+    for i in range(len(param_dict_list)):
+        c = combination_list[i][0]
+        m = combination_list[i][1]
+        plt.scatter(test_f_list[0,i,0], test_f_list[0,i,1], c=c, marker=m)
     tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
     
     test_f_list = solve_one_batch(args, agent, param_dict_list, test_batch2)
     plt.figure()
-    # plt.xlim((0,1000))
-    # plt.ylim((0,10000))
-    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1])
+    for i in range(len(param_dict_list)):
+        c = combination_list[i][0]
+        m = combination_list[i][1]
+        plt.scatter(test_f_list[0,i,0], test_f_list[0,i,1], c=c, marker=m)
     tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
     
     return validator
     
 
 @torch.no_grad()        
-def train_one_epoch(args, agent:Agent, policy:Policy, train_dataset, tb_writer, epoch):
+def train_one_epoch(args, agent:Agent, policy:Policy, validator:Validator, train_dataset, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
     agent.eval()
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
-    
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    vd_proc = None
     for batch_idx, batch in tqdm(enumerate(train_dataloader), desc=f'Training epoch {epoch}'):
+        print(batch_idx)
         param_dict_list, sample_list = policy.generate_random_parameters(n_sample=args.pop_size, use_antithetic=False)
         batch_f_list = solve_one_batch(args, agent, param_dict_list, batch)
         f_list = [batch_f_list]    
@@ -118,34 +124,55 @@ def train_one_epoch(args, agent:Agent, policy:Policy, train_dataset, tb_writer, 
 
         policy = update_policy(args.policy, policy, sample_list, score_list)
         policy.write_progress_to_tb(tb_writer)
+        if batch_idx % 4 == 0:
+            if vd_proc is not None:
+                vd_proc.wait()
+            save_policy(policy, epoch, args.title)
+            # validator = validate_one_epoch(args, agent, policy, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
+            # save_validator(validator, args.title)
+            vd_proc = validate_no_wait(args)
+    save_policy(policy, epoch, args.title)
+    vd_proc.wait()
+
     return policy
+
+def validate_no_wait(args)->subprocess.Popen:
+    vd_proc_cmd = ["python",
+                    "validate_r1nes.py",
+                    "--title",
+                    args.title,
+                    "--test-instance-name",
+                    args.test_instance_name,
+                    "--test-num-vehicles",
+                    str(args.test_num_vehicles),
+                    "--device",
+                    "cpu",
+                    "--num-validation-samples",
+                    str(args.num_validation_samples),
+                    "--policy",
+                    args.policy]
+    vd_proc = subprocess.Popen(vd_proc_cmd)
+    return vd_proc
 
 def run(args):
     agent, policy, validator, tb_writer, test_batch, test_batch2, last_epoch = setup_r1nes(args)
     validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
+    # vd_proc = None
     for epoch in range(last_epoch+1, args.max_epoch):
-        policy = train_one_epoch(args, agent, policy, train_dataset, tb_writer, epoch)
-        validator = validate_one_epoch(args, agent, policy, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
-        save_policy(policy, epoch, args.title)
-        save_validator(validator, args.title)
-        # param_dict_list, sample_list = policy.generate_random_parameters(n_sample=50, use_antithetic=False)
-        # test_f_list = solve_one_batch(args, agent, param_dict_list, test_batch)
-        # score = get_score_nd_cd(test_f_list[0,:,:])   
-        # score = get_score_hv_contributions(test_f_list[0,:,:], args.negative_hv)
-        # score = score.numpy()
-        # policy = update_policy(args.policy, policy, sample_list, score)
-        # policy.write_progress_to_tb(tb_writer)
-        # score_list += [score[np.newaxis,:,:]]
-        # print(test_f_list)
-        # plt.figure()
-        # plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1])
-        # tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), epoch)
+        policy = train_one_epoch(args, agent, policy, validator, train_dataset, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
+        # if vd_proc is not None:
+        #     vd_proc.wait()
+        # vd_proc = validate_no_wait(args)
+        # validator = validate_one_epoch(args, agent, policy, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
+        # save_policy(policy, epoch, args.title)
+        # save_validator(validator, args.title)
+    # vd_proc.wait()
 
         
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(4)
+    torch.set_num_threads(2)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
