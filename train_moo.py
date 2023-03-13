@@ -15,7 +15,7 @@ from bpdplp.bpdplp_env import BPDPLP_Env
 from bpdplp.bpdplp_dataset import BPDPLP_Dataset
 from model.agent import Agent
 from policy.policy import Policy
-from policy.utils import get_score_hv_contributions
+from policy.utils import get_score_nd_cd, get_score_hv_contributions
 from policy.non_dominated_sorting import fast_non_dominated_sort
 from utils import encode, solve_decode_only, save
 from utils_moo import update_policy, save_policy, save_validator
@@ -29,7 +29,7 @@ def prepare_args():
     args.device = torch.device(args.device)
     return args
 
-
+@torch.no_grad()
 def solve_one_batch(args, agent:Agent, param_dict_list, batch):
     num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
     env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
@@ -48,7 +48,7 @@ def solve_one_batch(args, agent:Agent, param_dict_list, batch):
     return batch_f_list
 
 @torch.no_grad()        
-def validate_one_epoch(args, agent:Agent, policy:Policy, validator:Validator, validation_dataset, test_batch, tb_writer, epoch):
+def validate_one_epoch(args, agent:Agent, policy:Policy, validator:Validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
     agent.eval()
     validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
     
@@ -83,11 +83,18 @@ def validate_one_epoch(args, agent:Agent, policy:Policy, validator:Validator, va
     test_f_list = solve_one_batch(args, agent, param_dict_list, test_batch)
     # print(test_f_list)
     plt.figure()
+    # plt.xlim((0,1000))
+    # plt.ylim((0,10000))
     plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1])
-    tb_writer.add_figure("Solutions "+args.test_instance_name, plt.gcf(), validator.epoch)
+    tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
     
-        
-
+    test_f_list = solve_one_batch(args, agent, param_dict_list, test_batch2)
+    plt.figure()
+    # plt.xlim((0,1000))
+    # plt.ylim((0,10000))
+    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1])
+    tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
+    
     return validator
     
 
@@ -103,23 +110,38 @@ def train_one_epoch(args, agent:Agent, policy:Policy, train_dataset, tb_writer, 
         f_list = np.concatenate(f_list,axis=0)
 
         score_list = []
-        # for i in range(len(train_dataset)):
-        score = get_score_hv_contributions(f_list[0,:,:], args.negative_hv)
-        score_list += [score]
+        for i in range(args.batch_size):
+            score = get_score_hv_contributions(f_list[i,:,:], args.negative_hv)
+            score_list += [score[np.newaxis,:,:]]
+        score_list = np.concatenate(score_list, axis=0)
+        score_list = np.mean(score_list, axis=0)
 
         policy = update_policy(args.policy, policy, sample_list, score_list)
+        policy.write_progress_to_tb(tb_writer)
     return policy
 
 def run(args):
-    agent, policy, validator, tb_writer, test_batch, last_epoch = setup_r1nes(args)
+    agent, policy, validator, tb_writer, test_batch, test_batch2, last_epoch = setup_r1nes(args)
     validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
-    
     for epoch in range(last_epoch+1, args.max_epoch):
         policy = train_one_epoch(args, agent, policy, train_dataset, tb_writer, epoch)
-        validator = validate_one_epoch(args, agent, policy, validator, validation_dataset, test_batch, tb_writer, epoch)
+        validator = validate_one_epoch(args, agent, policy, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
         save_policy(policy, epoch, args.title)
         save_validator(validator, args.title)
+        # param_dict_list, sample_list = policy.generate_random_parameters(n_sample=50, use_antithetic=False)
+        # test_f_list = solve_one_batch(args, agent, param_dict_list, test_batch)
+        # score = get_score_nd_cd(test_f_list[0,:,:])   
+        # score = get_score_hv_contributions(test_f_list[0,:,:], args.negative_hv)
+        # score = score.numpy()
+        # policy = update_policy(args.policy, policy, sample_list, score)
+        # policy.write_progress_to_tb(tb_writer)
+        # score_list += [score[np.newaxis,:,:]]
+        # print(test_f_list)
+        # plt.figure()
+        # plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1])
+        # tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), epoch)
+
         
 if __name__ == "__main__":
     args = prepare_args()

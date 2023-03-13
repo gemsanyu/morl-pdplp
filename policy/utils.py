@@ -2,9 +2,10 @@ from random import random
 import torch
 import math
 import inspect
+from typing import NamedTuple
 
 import numpy as np
-from typing import NamedTuple
+from scipy.spatial import distance_matrix
 
 from policy.non_dominated_sorting import fast_non_dominated_sort
 from policy.hv import Hypervolume
@@ -173,29 +174,50 @@ def get_bc_var(node_order_list, item_selection_list):
 
 def get_score_hv_contributions(f_list, negative_hv, nondom_archive=None, reference_point=None):
     real_num_sample, M = f_list.shape
+    f_list = f_list.copy()
     if nondom_archive is not None:
         f_list = combine_with_nondom(f_list, nondom_archive)
     num_sample, _ = f_list.shape
     # f_list = f_list.numpy()
     # count hypervolume, first nondom sort then count, assign penalty hv too
     hv_contributions = np.full(shape=(num_sample,),fill_value=negative_hv, dtype=np.float32)
-    nondom_idx = fast_non_dominated_sort(f_list)[0]
-    norm_f_list = normalize(f_list)
-    hv_contributions[nondom_idx] = get_hv_contributions(norm_f_list[nondom_idx], reference_point=None)
-    hv_contributions = torch.from_numpy(hv_contributions).float()
+    nondom_idx_list = fast_non_dominated_sort(f_list)
+    nadir = np.max(f_list, keepdims=True)
+    utopia = np.min(f_list, keepdims=True)
+    denom = nadir-utopia
+    denom[denom==0] = 1e-8
+    norm_f_list = (f_list-utopia)/denom
+    hv_contributions[nondom_idx_list[0]] = 0
+    for nondom_idx in nondom_idx_list:
+        # norm_f_list = normalize(f_list)
+        hv_contributions[nondom_idx] += get_hv_contributions(norm_f_list[nondom_idx], reference_point=None)
+    # hv_contributions = torch.from_numpy(hv_contributions).float()
     # hv_contributions = (1-novelty_w)+hv_contributions + novelty_w*novelty_score
 
     # prepare utility score
-    score = hv_contributions.unsqueeze(1)
+    score = hv_contributions[:,np.newaxis]
     score = score[:real_num_sample]
+    # score = score.numpy()
     return score
 
-def get_score_nsga2(f_list, nondom_archive=None, reference_point=None):
-    real_num_sample, M = f_list.shape
-    if nondom_archive is not None:
-        f_list = combine_with_nondom(f_list, nondom_archive)
-    num_sample, _ = f_list.shape
-    utility = get_utility(num_sample)
-    rank = get_nondominated_rank(f_list)
-    score = utility[rank][:real_num_sample].unsqueeze(1)
-    return score
+def get_score_nd_cd(f_list):
+    pop_size, _ = f_list.shape
+    score = np.zeros((pop_size,),dtype=np.float32)
+    nondom_idx_list = fast_non_dominated_sort(f_list)
+    for i, nondom_idx in enumerate(nondom_idx_list):
+        score[nondom_idx] = -i
+        if len(nondom_idx) == 1:
+            continue
+        score[nondom_idx] += get_cd(f_list[nondom_idx])
+    print(score)
+    return score[:, np.newaxis]
+
+def get_cd(f_list):
+    nadir = np.max(f_list, keepdims=True)
+    utopia = np.min(f_list, keepdims=True)
+    denom = nadir-utopia
+    denom[denom==0] = 1e-8
+    n_f_list = (f_list-utopia)/denom
+    D = distance_matrix(n_f_list, n_f_list)
+    cd = D.sum(axis=0)
+    return cd

@@ -70,6 +70,11 @@ def get_parser():
     #                     type=float,
     #                     default=1e-4,
     #                     help="learning rate for r1nes")
+    #CRFMNES
+    parser.add_argument('--sigma',
+                        type=float,
+                        default=2,
+                        help="sigma in crfmnes, step size")
 
     # agent base or AM
     parser.add_argument('--lr',

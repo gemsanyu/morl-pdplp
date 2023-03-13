@@ -8,11 +8,13 @@ from policy.policy import Policy
 
 def update_policy(policy_type:str, policy:Policy, sample_list, score_list):
     if policy_type == "r1-nes":
-        score_list = np.concatenate(score_list, axis=1)
-        score_list = np.mean(score_list, axis=1, keepdims=True)
+        # score_list = np.concatenate(score_list, axis=1)
+        # score_list = np.mean(score_list, axis=1, keepdims=True)
         x_list = sample_list - policy.mu
         w_list = x_list/math.exp(policy.ld)
         policy.update(w_list, x_list, score_list)
+    elif policy_type == "crfmnes":
+        policy.update(sample_list, score_list)
     return policy
 
 def save_policy(policy, epoch, title):

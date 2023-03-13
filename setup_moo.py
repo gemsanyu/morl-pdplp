@@ -7,11 +7,14 @@ from torch.utils.tensorboard import SummaryWriter
 from bpdplp.bpdplp import BPDPLP
 from model.agent import Agent
 from policy.r1_nes import R1_NES
+from policy.crfmnes import CRFMNES
+from policy.policy import Policy
 from validator import load_validator
 from utils import instance_to_batch
 
 CPU_DEVICE = torch.device("cpu")
-POLICY_TYPE_DICT = {"r1-nes":R1_NES}
+POLICY_TYPE_DICT = {"r1-nes":R1_NES,
+                    "crfmnes":CRFMNES}
 
 NUM_NODE_STATIC_FEATURES = 4
 NUM_VEHICLE_DYNAMIC_FEATURES = 2
@@ -40,10 +43,12 @@ def get_tb_writer(args)->SummaryWriter:
     tb_writer = SummaryWriter(log_dir=model_summary_dir.absolute())
     return tb_writer
 
-def get_policy(args, num_neurons):
+def get_policy(args, num_neurons) -> Policy :
     policy_class = POLICY_TYPE_DICT[args.policy]
     if args.policy == "r1-nes":
         policy = policy_class(num_neurons,NUM_VEHICLE_DYNAMIC_FEATURES, NUM_NODE_DYNAMIC_FEATURES, args.ld, args.negative_hv, args.lr, args.pop_size)
+    elif args.policy == "crfmnes":
+        policy = policy_class(num_neurons,NUM_VEHICLE_DYNAMIC_FEATURES, NUM_NODE_DYNAMIC_FEATURES, args.sigma, args.negative_hv)
     return policy
 
     
@@ -67,6 +72,7 @@ def setup_r1nes(args, load_best=False):
         print("CHECKPOINT NOT FOUND! new run?")
 
     policy = get_policy(args, args.embed_dim)
+    policy.copy_to_mean(agent)
     validator = load_validator(args)
     last_epoch = 0
     if checkpoint is not None:
@@ -75,4 +81,6 @@ def setup_r1nes(args, load_best=False):
         
     test_instance = BPDPLP(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
     test_batch = instance_to_batch(test_instance)
-    return agent, policy, validator, tb_writer, test_batch, last_epoch
+    test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
+    test_batch2 = instance_to_batch(test_instance2)
+    return agent, policy, validator, tb_writer, test_batch, test_batch2, last_epoch

@@ -21,41 +21,42 @@ class Policy(object):
 
         #hitung per component agar mudah plug in plug out component uji coba
         self.n_params = 0
-        self.n_params += self.num_neurons*self.vehicle_current_state_dim
-        self.n_params += 3*self.num_neurons*self.num_node_dynamic_features
+        # self.n_params += self.num_neurons*self.vehicle_current_state_dim
+        # self.n_params += 3*self.num_neurons*self.num_node_dynamic_features
         self.n_params += self.num_neurons*self.num_neurons
 
-    def create_param_dict(self, param_vec):
-        param_vec = param_vec.ravel()
+    def create_param_dict(self, param_vec, device):
+        param_vec = param_vec.ravel().to(device)
         params_idx = 0
-        pcs_weight = param_vec[params_idx:params_idx+self.num_neurons*self.vehicle_current_state_dim].view(self.num_neurons,self.vehicle_current_state_dim)
-        params_idx += self.num_neurons*self.vehicle_current_state_dim
-        pns_weight = param_vec[params_idx:params_idx+3*self.num_neurons*self.num_node_dynamic_features].view(3*self.num_neurons, self.num_node_dynamic_features)
-        params_idx += 3*self.num_neurons*self.num_node_dynamic_features
+        # pcs_weight = param_vec[params_idx:params_idx+self.num_neurons*self.vehicle_current_state_dim].view(self.num_neurons,self.vehicle_current_state_dim)
+        # params_idx += self.num_neurons*self.vehicle_current_state_dim
+        # pns_weight = param_vec[params_idx:params_idx+3*self.num_neurons*self.num_node_dynamic_features].view(3*self.num_neurons, self.num_node_dynamic_features)
+        # params_idx += 3*self.num_neurons*self.num_node_dynamic_features
         po_weight = param_vec[params_idx:params_idx+self.num_neurons*self.num_neurons].view(self.num_neurons, self.num_neurons)
         params_idx += self.num_neurons*self.num_neurons
         param_dict = {
-                     "pcs_weight":pcs_weight,
-                     "pns_weight":pns_weight,
+                    #  "pcs_weight":pcs_weight,
+                    #  "pns_weight":pns_weight,
                      "po_weight":po_weight,
                      }      
         return param_dict
 
     @abstractmethod
-    def generate_random_parameters(self, n_sample):
+    def generate_random_parameters(self, n_sample, device):
         pass
 
     @abstractmethod
-    def generate_on_mean(self):
+    def copy_to_mean(self, agent):
         pass
 
-    @abstractmethod
-    def logprob(self, sample_list):
-        pass
+    # @abstractmethod
+    # def logprob(self, sample_list):
+    #     pass
+    
+    # @abstractmethod
+    # def write_progress_to_tb(self, writer):
+    #     pass
 
-    @abstractmethod
-    def set_new_device(self, new_device, actor_device=None):
-        pass
 
 
 def get_multi_importance_weight(policy_list, sample_list):

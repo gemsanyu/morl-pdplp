@@ -32,7 +32,8 @@ class R1_NES(Policy):
 
         # hyperparams
         self.negative_hv = negative_hv
-        self.lr_mu = 1
+        # self.lr_mu = 1
+        self.lr_mu = lr
         # old self.lr = (3+math.log(self.n_params))/(5*math.sqrt(self.n_params))
                 
         if pop_size is None:
@@ -42,17 +43,18 @@ class R1_NES(Policy):
             lr = 0.6 * (3 + math.log2(self.n_params)) / self.n_params / math.sqrt(self.n_params)
         self.lr = lr
 
-    def copy_to_mu(self, agent: Agent):
+    def copy_to_mean(self, agent: Agent):
+        pcs_weight, pns_weight, po_weight = None, None, None
         for name, param in agent.named_parameters():
-            if name == "project_current_state.weight":
-                pcs_weight = param.data.ravel()
-            if name == "project_node_state.weight":
-                pns_weight = param.data.ravel()
+            # if name == "project_current_vehicle_state.weight":
+            #     pcs_weight = param.data.ravel()
+            # if name == "project_node_state.weight":
+            #     pns_weight = param.data.ravel()
             if name == "project_out.weight":
                 po_weight = param.data.ravel()
         mu_list = []
-        mu_list += [pcs_weight]
-        mu_list += [pns_weight]
+        # mu_list += [pcs_weight]
+        # mu_list += [pns_weight]
         mu_list += [po_weight]
         self.mu = torch.cat(mu_list)
         self.mu = self.mu.unsqueeze(0)
@@ -64,7 +66,7 @@ class R1_NES(Policy):
     theta = mu + s*sigma
     return theta mapped with param names of the policy
     '''
-    def generate_random_parameters(self, n_sample: int = 2, use_antithetic=True):
+    def generate_random_parameters(self, n_sample: int = 2, use_antithetic=True, device=CPU_DEVICE):
         
         if n_sample > 1:
             if use_antithetic:
@@ -88,7 +90,7 @@ class R1_NES(Policy):
 
         param_dict_list = []
         for param_vec in random_params:
-            param_dict_list += [self.create_param_dict(param_vec)]
+            param_dict_list += [self.create_param_dict(param_vec, device)]
         return param_dict_list, random_params
 
     '''
@@ -120,13 +122,11 @@ class R1_NES(Policy):
         ngrad_z_l = (ngrad_pv_l - nvtz*u)/r
         ngrad_c_j = torch.sum(score*ngrad_c_l, dim=0)
         ngrad_z_j = torch.sum(score*ngrad_z_l, dim=0, keepdim=True)
-        # print(ngrad_c_j)
-        # print(ngrad_z_j)
-        print(self.principal_vector)
+        print(ngrad_c_j)
         # start updating
         # conditional update on c,z,v to prevent unstable (flipping and large) v update
         epsilon = min(self.lr, 2 * math.sqrt(r ** 2 / torch.sum(ngrad_pv_j**2)))
-        if ngrad_c_j < 0:
+        if ngrad_c_j <= 0:
             # multiplicative update
             c = torch.log(r)
             c = c + epsilon*ngrad_c_j
@@ -136,16 +136,10 @@ class R1_NES(Policy):
         else:
             # additive update
             self.principal_vector = self.principal_vector + epsilon*ngrad_pv_j
-        print(self.principal_vector)
         ngrad_mu_j = torch.sum(score*ngrad_mu_l, dim=0)
         ngrad_ld_j = torch.sum(score*ngrad_ld_l, dim=0)
-        print(self.mu)
         self.mu = self.mu + self.lr_mu*ngrad_mu_j
-        print(self.mu)
-        print(self.ld)
         self.ld = self.ld + self.lr*ngrad_ld_j
-        print(self.ld)
-        exit()
 
     @property
     def _getMaxVariance(self):
@@ -164,16 +158,16 @@ class R1_NES(Policy):
         logprob = cc + temp1 + temp2
         return logprob
 
-    def write_progress_to_tb(self, writer, step):
+    def write_progress_to_tb(self, writer):
         # note the parameters
-        writer.add_scalar("Mu Norm", torch.norm(self.mu).cpu().item(), step)
-        writer.add_scalar("V Norm", torch.norm(self.principal_vector).cpu().item(), step)
-        writer.add_scalar("Max Var", self._getMaxVariance, step)    
-        writer.add_scalar("Lambda", self.ld, step)
+        writer.add_scalar("Mu Norm", torch.norm(self.mu).cpu().item())
+        writer.add_scalar("V Norm", torch.norm(self.principal_vector).cpu().item())
+        writer.add_scalar("Max Var", self._getMaxVariance)    
+        writer.add_scalar("Lambda", self.ld)
         maxmu = torch.max(self.mu)
         minmu = torch.min(self.mu)
-        writer.add_scalar("Max Mu", maxmu.item(), step)
-        writer.add_scalar("Min Mu", minmu.item(), step)
+        writer.add_scalar("Max Mu", maxmu.item())
+        writer.add_scalar("Min Mu", minmu.item())
         writer.flush()
 
 '''
