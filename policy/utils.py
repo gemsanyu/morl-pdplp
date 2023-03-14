@@ -187,10 +187,11 @@ def get_score_hv_contributions(f_list, negative_hv, nondom_archive=None, referen
     denom = nadir-utopia
     denom[denom==0] = 1e-8
     norm_f_list = (f_list-utopia)/denom
-    hv_contributions[nondom_idx_list[0]] = 0
-    for nondom_idx in nondom_idx_list:
-        # norm_f_list = normalize(f_list)
-        hv_contributions[nondom_idx] += get_hv_contributions(norm_f_list[nondom_idx], reference_point=None)
+    hv_contributions[nondom_idx_list[0]] = get_hv_contributions(norm_f_list[nondom_idx_list[0]], reference_point=None)
+    # hv_contributions[nondom_idx_list[0]] = 0
+    # for nondom_idx in nondom_idx_list:
+    #     # norm_f_list = normalize(f_list)
+    #     hv_contributions[nondom_idx] += get_hv_contributions(norm_f_list[nondom_idx], reference_point=None)
     # hv_contributions = torch.from_numpy(hv_contributions).float()
     # hv_contributions = (1-novelty_w)+hv_contributions + novelty_w*novelty_score
 
