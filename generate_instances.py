@@ -38,7 +38,7 @@ def generate(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx):
     
 
 def run():
-    num_samples_per_config = 2
+    num_samples_per_config = 1
     num_requests_list = [50,100,200]
     num_vehicles_list = [1,3,5,10]
     num_clusters_list = [3,4,5,6,7,8]
@@ -48,7 +48,7 @@ def run():
     max_capacity_list = [100,300]
     distribution_list = [RANDOM, RANDOMCLUSTER, CLUSTER]
     depot_location_list = [RANDOM, CENTRAL]
-    mode ="testing_batch"
+    mode ="validation"
     graph_seed = read_graph("barcelona.txt")
     config_list = [(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx) for nr in num_requests_list for nv in num_vehicles_list for nc in num_clusters_list for cd in cluster_delta_list for pt in planning_time_list for twl in time_window_length_list for mc in max_capacity_list for d in distribution_list for dl in depot_location_list for idx in range(num_samples_per_config)]
     with Pool(processes=5) as pool:

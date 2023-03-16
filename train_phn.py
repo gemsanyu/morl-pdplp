@@ -218,12 +218,8 @@ def initialize(po_weight,phn:PHN,opt,tb_writer):
     loss.backward()
     opt.step()
     return loss.cpu().item()
-    
 
-def run(args):
-    agent, phn, opt, validator, tb_writer, test_batch, test_batch2, last_epoch = setup_phn(args)
-    # validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
-    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
+def init_phn_output(agent, phn, tb_writer, max_step):
     max_init_step = 1000
     po_weight = None
     for name, param in agent.named_parameters():
@@ -236,6 +232,12 @@ def run(args):
         loss = initialize(po_weight,phn,opt_init,tb_writer)
         if loss < 1e-4:
             break
+
+def run(args):
+    agent, phn, opt, validator, tb_writer, test_batch, test_batch2, last_epoch = setup_phn(args)
+    # validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
+    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
+    
 
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, phn, opt, train_dataset, tb_writer, epoch)

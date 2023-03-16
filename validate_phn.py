@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from bpdplp.bpdplp_dataset import BPDPLP_Dataset
-from train_phn import prepare_args, validate_one_epoch
+from utils_moo import prepare_args
 from validator import save_validator
 from setup_phn import setup_phn
 
