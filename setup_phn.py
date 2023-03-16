@@ -29,7 +29,6 @@ def get_agent(args, agent_checkpoint_path:pathlib.Path) -> Agent:
 
     checkpoint = torch.load(agent_checkpoint_path.absolute(), map_location=CPU_DEVICE)
     agent.load_state_dict(checkpoint["agent_state_dict"])
-    print(checkpoint["epoch"],"LAST AGENT EPOCH")
     return agent
     
 def get_tb_writer(args, validation=True)->SummaryWriter:
