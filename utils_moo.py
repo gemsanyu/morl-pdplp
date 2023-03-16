@@ -109,7 +109,7 @@ def solve_one_batch(agent, param_dict_list, batch):
 @torch.no_grad()        
 def validate_one_epoch(args, agent, phn, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
     agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, shuffle=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, pin_memory=True)
     
     ray_list, param_dict_list = generate_params(phn, args.num_ray, agent.device)
     f_list = []

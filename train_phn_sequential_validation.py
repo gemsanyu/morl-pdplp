@@ -15,7 +15,7 @@ from validator import save_validator
 from setup_phn import setup_phn
 
 def train_one_epoch(args, agent:Agent, phn:PHN, opt, train_dataset, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch, init_stage=False):
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
     ld = args.ld
     for batch_idx, batch in tqdm(enumerate(train_dataloader), desc=f'Training epoch {epoch}'):
         agent.train()
@@ -57,7 +57,7 @@ def run(args):
         
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(2)
+    torch.set_num_threads(4)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)

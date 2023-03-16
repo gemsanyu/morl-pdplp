@@ -133,7 +133,7 @@ def get_hv_d(batch_f_list, mo_opt:HvMaximization):
     return hv_d_list
 
 def train_one_epoch(args, agent:Agent, phn:PHN, opt, train_dataset, tb_writer, epoch):
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
     mo_opt = HvMaximization(n_mo_sol=args.num_ray, n_mo_obj=2)
     
     vd_proc = None
@@ -245,7 +245,7 @@ def run(args):
         
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(2)
+    torch.set_num_threads(4)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
