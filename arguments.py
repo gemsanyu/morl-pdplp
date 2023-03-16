@@ -3,10 +3,14 @@ import argparse
 def get_parser():
     parser = argparse.ArgumentParser(description='TTP-MORL')
     # GENERAL
-    parser.add_argument('--test-dataset-name',
+    parser.add_argument('--test-instance-name',
                         type=str,
-                        default="eil76-n75",
-                        help="dataset's name for real testing")
+                        default="bar-n100-1",
+                        help="instance's name for real testing")
+    parser.add_argument('--test-num-vehicles',
+                        type=int,
+                        default=3,
+                        help="num vehicles for test instance")
     parser.add_argument('--title',
                         type=str,
                         default="init-sop",
@@ -40,6 +44,25 @@ def get_parser():
                         default=1,
                         help="gradient clipping")
     
+    #PHN
+    parser.add_argument('--ray-hidden-size',
+                        type=int,
+                        default=128,
+                        help="phn ray hidden size")
+    parser.add_argument('--num-ray',
+                        type=int,
+                        default=8,
+                        help="num of rays")
+    parser.add_argument('--omega',
+                        type=int,
+                        default=10,
+                        help="max patience")
+    
+    parser.add_argument('--ld',
+                        type=float,
+                        default=0,
+                        help="ld cosine sim penalty")
+
     # agent base or AM
     parser.add_argument('--lr',
                         type=float,

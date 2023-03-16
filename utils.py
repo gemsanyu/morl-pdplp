@@ -4,8 +4,30 @@ import pathlib
 import numpy as np
 import torch
 
+from bpdplp.bpdplp import BPDPLP
 from bpdplp.bpdplp_env import BPDPLP_Env
 from model.agent import Agent
+
+
+def instance_to_batch(instance:BPDPLP)->BPDPLP_Env:
+    coords = torch.from_numpy(instance.coords).unsqueeze(0)
+    norm_coords = torch.from_numpy(instance.norm_coords).unsqueeze(0)
+    demands = torch.from_numpy(instance.demands).unsqueeze(0)
+    norm_demands = torch.from_numpy(instance.norm_demands).unsqueeze(0)
+    time_windows = torch.from_numpy(instance.time_windows).unsqueeze(0)
+    norm_time_windows = torch.from_numpy(instance.norm_time_windows).unsqueeze(0)
+    service_durations = torch.from_numpy(instance.service_durations).unsqueeze(0)
+    norm_service_durations = torch.from_numpy(instance.norm_service_durations).unsqueeze(0)
+    distance_matrix = torch.from_numpy(instance.distance_matrix).unsqueeze(0)
+    norm_distance_matrix = torch.from_numpy(instance.norm_distance_matrix).unsqueeze(0)
+    road_types = torch.from_numpy(instance.road_types).unsqueeze(0)
+    max_capacity = torch.tensor([instance.max_capacity])
+    num_vehicles = torch.tensor([instance.num_vehicles])
+    planning_time = torch.tensor([instance.planning_time])
+    # env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time , time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
+    # return env
+    return num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
+    
 # joint TRL Encoder
 # encode spatial+other first
 # then encode time windows + spatial
@@ -58,7 +80,7 @@ i hope it doesn't affect the agent training,
 i think it will not because we will mask the glimpse computation
 too. i guess.
 """
-def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static):
+def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict=None):
     batch_size, num_nodes, embed_dim = node_embeddings.shape
     batch_idx = np.arange(batch_size)
     sum_logprobs = torch.zeros((batch_size,), device=agent.device, dtype=torch.float32)
@@ -89,7 +111,7 @@ def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, gli
                                         glimpse_K_static,
                                         logits_K_static,
                                         feasibility_mask,
-                                        param_dict=None)
+                                        param_dict)
         selected_vecs, selected_nodes, logprob_list, entropy_list = forward_results
         selected_vecs = selected_vecs.cpu().numpy()
         selected_nodes = selected_nodes.cpu().numpy()
