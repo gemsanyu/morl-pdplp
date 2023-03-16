@@ -30,10 +30,20 @@ class Validator:
         self.mean_running_igd = None
         self.epoch = 0
     
+    @property
+    def is_improving(self):
+        if self.mean_running_igd is None or len(self.mean_running_igd) < self.omega:
+            return True
+        max_running_igd = float(np.max(self.mean_running_igd))
+        max_delta_nadir = float(np.max(self.mean_delta_nadir))
+        max_delta_utopia = float(np.max(self.mean_delta_utopia))
+        is_convergence_done = (max_delta_nadir<=0.05) and (max_delta_utopia<=0.05)
+        is_diversification_done = max_running_igd<=0.05
+        return not (is_convergence_done and is_diversification_done)
+    
     def get_last_mean_running_igd(self):
         if self.mean_running_igd is None:
             return None
-        print(self.mean_running_igd)
         return self.mean_running_igd[-1]
 
     def get_last_delta_refpoints(self):
@@ -115,13 +125,13 @@ class Validator:
         if self.delta_nadir is None:
             self.delta_nadir = new_delta_nadir
             self.delta_utopia = new_delta_utopia
-            self.mean_delta_nadir = np.mean(new_delta_nadir, keepdims=True)
-            self.mean_delta_utopia = np.mean(new_delta_utopia, keepdims=True)
+            self.mean_delta_nadir = np.mean(new_delta_nadir)[np.newaxis]
+            self.mean_delta_utopia = np.mean(new_delta_utopia)[np.newaxis]
         else:
             self.delta_nadir = np.concatenate([self.delta_nadir, new_delta_nadir], axis=0)
             self.delta_utopia = np.concatenate([self.delta_utopia, new_delta_utopia], axis=0)        
-            self.mean_delta_nadir =  np.concatenate([self.mean_delta_nadir, np.mean(new_delta_nadir,keepdims=True)])
-            self.mean_delta_utopia = np.concatenate([self.mean_delta_utopia, np.mean(new_delta_utopia, keepdims=True)])
+            self.mean_delta_nadir =  np.concatenate([self.mean_delta_nadir, np.mean(new_delta_nadir)[np.newaxis]])
+            self.mean_delta_utopia = np.concatenate([self.mean_delta_utopia, np.mean(new_delta_utopia)[np.newaxis]])
         if len(self.delta_nadir) > self.omega:
             self.delta_nadir = self.delta_nadir[-self.omega:]
             self.delta_utopia = self.delta_utopia[-self.omega:]

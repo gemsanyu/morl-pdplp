@@ -35,8 +35,8 @@ def get_hv_d(batch_f_list):
     hv_d_list = torch.cat(hv_d_list, dim=0)
     return hv_d_list
 
-def compute_loss(logprob_list, batch_f_list, greedy_batch_f_list):
-    device = logprob_list.device()
+def compute_loss(logprob_list, batch_f_list, greedy_batch_f_list, ray_list):
+    device = logprob_list.device
     A = batch_f_list-greedy_batch_f_list
     nadir = np.max(A, axis=1, keepdims=True)
     utopia = np.min(A, axis=1, keepdims=True)
@@ -158,8 +158,7 @@ def validate_one_epoch(args, agent, phn, validator, validation_dataset, test_bat
         m = combination_list[i][1]
         plt.scatter(test_f_list[0,i,0], test_f_list[0,i,1], c=c, marker=m)
     tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
-    
-    return validator
+
 
 def initialize(po_weight, phn, opt,tb_writer):
     ray = np.asanyarray([[0.5,0.5]],dtype=float)
