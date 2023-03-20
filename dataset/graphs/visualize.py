@@ -4,7 +4,7 @@ import numpy as np
 if __name__ == "__main__":
     num_nodes = 0
     coords = None
-    graph_filename = "barcelona.txt"
+    graph_filename = "berlin.txt"
     with open(graph_filename, "r") as graph_file:
         lines = graph_file.readlines()
         num_nodes = int(lines[0].split()[1])
@@ -16,6 +16,6 @@ if __name__ == "__main__":
     print(num_nodes)
     print(coords)
     m = folium.Map(location=coords[0], zoom_start=12, tiles="Stamen Terrain")
-    for i in range(num_nodes):
+    for i in range(500):
         folium.Marker(coords[i]).add_to(m)
     m.save(graph_filename+".html")
