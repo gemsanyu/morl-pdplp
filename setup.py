@@ -11,7 +11,7 @@ NUM_VEHICLE_DYNAMIC_FEATURES = 4
 NUM_NODE_DYNAMIC_FEATURES = 1
 
 def setup(args, load_best=False):
-    agent = Agent(num_node_static_features=NUM_NODE_DYNAMIC_FEATURES,
+    agent = Agent(num_node_static_features=NUM_NODE_STATIC_FEATURES,
                   num_vehicle_dynamic_features=NUM_VEHICLE_DYNAMIC_FEATURES,
                   num_node_dynamic_features=NUM_NODE_DYNAMIC_FEATURES,
                   n_heads=args.n_heads,
