@@ -124,11 +124,11 @@ class BPDPLP_Env(object):
     """
     @property
     def static_features(self):
-        features = np.zeros((self.batch_size, self.num_nodes, 4), dtype=np.float32)
-        # features[:,:,:2] = self.norm_coords
-        features[:,:,0] = self.norm_demands
-        features[:,:,1] = self.norm_service_durations
-        features[:,:,2:] = self.norm_time_windows
+        features = np.zeros((self.batch_size, self.num_nodes, 6), dtype=np.float32)
+        features[:,:,:2] = self.norm_coords
+        features[:,:,2] = self.norm_demands
+        features[:,:,3] = self.norm_service_durations
+        features[:,:,4:] = self.norm_time_windows
         return features
     
     """
@@ -136,11 +136,12 @@ class BPDPLP_Env(object):
     """
     @property
     def vehicle_dynamic_features(self):
-        # norm_current_coords = self.norm_coords[self.batch_vec_idx, self.current_location_idx.flatten(),:]
-        # norm_current_coords = norm_current_coords.reshape(self.batch_size, self.max_num_vehicles, 2)
+        norm_current_coords = self.norm_coords[self.batch_vec_idx, self.current_location_idx.flatten(),:]
+        norm_current_coords = norm_current_coords.reshape(self.batch_size, self.max_num_vehicles, 2)
         norm_current_load = (self.current_load/self.max_capacity[:, np.newaxis])[:,:, np.newaxis]
         norm_current_time = (self.current_time/self.planning_time[:, np.newaxis])[:,:, np.newaxis]
         features = np.concatenate([norm_current_load,norm_current_time], axis=-1)
+        features = np.concatenate([norm_current_coords, features], axis=-1)
         return features
     
 
