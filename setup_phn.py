@@ -9,12 +9,9 @@ from model.agent import Agent
 from model.phn import PHN
 from validator import load_validator
 from utils import instance_to_batch
+from setup import NUM_NODE_STATIC_FEATURES, NUM_VEHICLE_DYNAMIC_FEATURES, NUM_NODE_DYNAMIC_FEATURES
 
 CPU_DEVICE = torch.device("cpu")
-
-NUM_NODE_STATIC_FEATURES = 4
-NUM_VEHICLE_DYNAMIC_FEATURES = 2
-NUM_NODE_DYNAMIC_FEATURES = 1
 
 def get_agent(args, agent_checkpoint_path:pathlib.Path) -> Agent:
     agent = Agent(num_node_static_features=NUM_NODE_STATIC_FEATURES,

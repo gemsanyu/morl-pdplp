@@ -5,10 +5,15 @@ from model.agent import Agent
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+
+NUM_NODE_STATIC_FEATURES = 6
+NUM_VEHICLE_DYNAMIC_FEATURES = 4
+NUM_NODE_DYNAMIC_FEATURES = 1
+
 def setup(args, load_best=False):
-    agent = Agent(num_node_static_features=4,
-                  num_vehicle_dynamic_features=2,
-                  num_node_dynamic_features=1,
+    agent = Agent(num_node_static_features=NUM_NODE_DYNAMIC_FEATURES,
+                  num_vehicle_dynamic_features=NUM_VEHICLE_DYNAMIC_FEATURES,
+                  num_node_dynamic_features=NUM_NODE_DYNAMIC_FEATURES,
                   n_heads=args.n_heads,
                   n_gae_layers=args.n_gae_layers,
                   embed_dim=args.embed_dim,
