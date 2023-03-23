@@ -22,7 +22,7 @@ def prepare_args():
 @torch.no_grad()
 def validate_one_epoch(args, agent, validation_dataset, tb_writer, epoch):
     agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=3, pin_memory=True)
     sum_validation_travel_costs = 0
     sum_validation_penalties = 0
     sum_validation_entropies = 0
@@ -50,7 +50,7 @@ def validate_one_epoch(args, agent, validation_dataset, tb_writer, epoch):
     return validation_score
         
 def train_one_epoch(args, agent, opt, train_dataset, tb_writer, epoch):
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=3, pin_memory=True)
     sum_advantage = 0
     sum_training_travel_costs = 0
     sum_training_penalties = 0
@@ -120,7 +120,7 @@ def run(args):
 
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(4)
+    torch.set_num_threads(3)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
