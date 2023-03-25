@@ -22,7 +22,7 @@ def test_all_parallel(instances_name_list, num_vehicles_list, title, num_ray):
     #     test(*config)
 
 if __name__ == "__main__":
-    title="hnc-phn"
+    title="phn-hc"
     num_ray=200
 
     instances_name_list = [
@@ -61,7 +61,25 @@ if __name__ == "__main__":
                         "ber-n400-3",
                         "ber-n400-4",
                         "ber-n400-5",
-                        "ber-n400-6"
+                        "ber-n400-6",
+                        "poa-n100-1",
+                        "poa-n100-2",
+                        "poa-n100-3",
+                        "poa-n100-4",
+                        "poa-n100-5",
+                        "poa-n100-6",
+                        "poa-n200-1",
+                        "poa-n200-2",
+                        "poa-n200-3",
+                        "poa-n200-4",
+                        "poa-n200-5",
+                        "poa-n200-6",
+                        "poa-n400-1",
+                        "poa-n400-2",
+                        "poa-n400-3",
+                        "poa-n400-4",
+                        "poa-n400-5",
+                        "poa-n400-6",
                     ]
     num_vehicles_list = [1,3,5,10]
     test_all_parallel(instances_name_list, num_vehicles_list, title, num_ray)
