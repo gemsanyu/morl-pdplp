@@ -10,14 +10,8 @@ from tqdm import tqdm
 from arguments import get_parser
 from bpdplp.bpdplp_env import BPDPLP_Env
 from bpdplp.bpdplp_dataset import BPDPLP_Dataset
-from utils import encode, solve_decode_only, save
+from utils import encode, solve_decode_only, save, prepare_args
 from setup import setup
-
-def prepare_args():
-    parser = get_parser()
-    args = parser.parse_args(sys.argv[1:])
-    args.device = torch.device(args.device)
-    return args
 
 @torch.no_grad()
 def validate_one_epoch(args, agent, validation_dataset, tb_writer, epoch):

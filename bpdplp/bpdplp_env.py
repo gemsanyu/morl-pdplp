@@ -280,7 +280,7 @@ class BPDPLP_Env(object):
         is_too_late = selected_vecs_current_time > selected_nodes_tw[:,1]
         if np.any(is_too_late):
             self.late_penalty[batch_idx[is_too_late], selected_vecs[is_too_late]] += (selected_vecs_current_time[is_too_late]-selected_nodes_tw[is_too_late,1])
-        
+            # exit()
         self.arrived_time[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = self.current_time[batch_idx, selected_vecs]
         self.travel_cost[batch_idx, selected_vecs] += travel_time_vecs 
         self.current_location_idx[batch_idx, selected_vecs] = selected_nodes

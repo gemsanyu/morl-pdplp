@@ -1,11 +1,19 @@
 import os
 import pathlib
+import sys
 
 import numpy as np
 import torch
 
+from arguments import get_parser
 from bpdplp.bpdplp_env import BPDPLP_Env
 from bpdplp.bpdplp import BPDPLP
+
+def prepare_args():
+    parser = get_parser()
+    args = parser.parse_args(sys.argv[1:])
+    args.device = torch.device(args.device)
+    return args
 
 def instance_to_batch(instance:BPDPLP)->BPDPLP_Env:
     coords = torch.from_numpy(instance.coords).unsqueeze(0)
@@ -79,6 +87,8 @@ def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, gli
     logits_K_static = logits_K_static.unsqueeze(1).expand(-1,max_num_vehicles,-1,-1)
     fixed_context = fixed_context.unsqueeze(1).expand(-1,max_num_vehicles,-1)
     while torch.any(feasibility_mask):
+        # print("vec features", torch.any(torch.isnan(vehicle_dynamic_features)))
+        # print("node features", torch.any(torch.isnan(node_dynamic_features)))
         prev_node_embeddings = node_embeddings[env.batch_vec_idx, env.current_location_idx.flatten(), :]
         prev_node_embeddings = prev_node_embeddings.view((batch_size,max_num_vehicles,-1))
         forward_results = agent.forward(node_embeddings,

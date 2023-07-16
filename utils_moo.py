@@ -18,12 +18,6 @@ from policy.non_dominated_sorting import fast_non_dominated_sort
 from utils import encode, solve_decode_only
 from solver.hv_maximization import HvMaximization
 
-def prepare_args():
-    parser = get_parser()
-    args = parser.parse_args(sys.argv[1:])
-    args.device = torch.device(args.device)
-    return args
-
 def get_hv_d(batch_f_list):
     hv_d_list = [] 
     batch_size, num_sample, num_obj = batch_f_list.shape
@@ -35,29 +29,38 @@ def get_hv_d(batch_f_list):
     hv_d_list = torch.cat(hv_d_list, dim=0)
     return hv_d_list
 
-def compute_loss(logprob_list, batch_f_list, greedy_batch_f_list, ray_list):
+def compute_loss(logprob_list, batch_f_list, ray_list):
     device = logprob_list.device
-    A = batch_f_list-greedy_batch_f_list
+    # A = batch_f_list-greedy_batch_f_list
+    A = batch_f_list
     nadir = np.max(A, axis=1, keepdims=True)
     utopia = np.min(A, axis=1, keepdims=True)
     denom = (nadir-utopia)
     denom[denom==0] = 1e-8
     norm_obj = (A-utopia)/denom
-    hv_d_list = get_hv_d(A)
+    # norm_obj = batch_f_list
+    hv_d_list = get_hv_d(norm_obj)
     
     # compute loss now
     hv_d_list = hv_d_list.to(device)
     norm_obj = torch.from_numpy(norm_obj).to(device)
-    A = torch.from_numpy(A).to(device)
+    A = torch.from_numpy(A.copy()).to(device)
+    # A -= A.mean(dim=1,keepdim=True)
+    norm_obj -= norm_obj.mean(dim=1, keepdim=True)
     logprob_list = logprob_list.unsqueeze(2)
-    loss_per_obj = logprob_list*A
+    loss_per_obj = logprob_list*norm_obj
     final_loss_per_obj = loss_per_obj*hv_d_list
     final_loss_per_instance = final_loss_per_obj.sum(dim=2)
     final_loss_per_ray = final_loss_per_instance.mean(dim=0)
     final_loss = final_loss_per_ray.sum()
     
     ray_list = ray_list.unsqueeze(0).expand_as(loss_per_obj)
-    cos_penalty = cosine_similarity(loss_per_obj, ray_list, dim=2)
+    cos_penalty = cosine_similarity(norm_obj, ray_list, dim=2)*logprob_list.squeeze(-1)
+    # A,B,_ = ray_list.shape
+    # for a in range(A):
+    #     for b in range(B):
+    #         print(ray_list[a,b,:].numpy(), norm_obj[a,b,:].numpy(), cos_penalty[a,b].detach().numpy())
+    # exit()
     cos_penalty_per_ray = cos_penalty.mean(dim=0)
     total_cos_penalty = cos_penalty_per_ray.sum()
     return final_loss, total_cos_penalty
@@ -105,7 +108,9 @@ def solve_one_batch(agent, param_dict_list, batch):
         logprob_list += [sum_logprobs.unsqueeze(1)]
     batch_f_list = np.concatenate(batch_f_list, axis=1)
     logprob_list = torch.cat(logprob_list, dim=1)
-    return logprob_list, batch_f_list
+    planning_time_dv = env.planning_time[:, np.newaxis, np.newaxis]
+    norm_batch_f_list = batch_f_list/planning_time_dv
+    return logprob_list, batch_f_list, norm_batch_f_list
 
 @torch.no_grad()        
 def validate_one_epoch(args, agent, phn, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
@@ -115,7 +120,7 @@ def validate_one_epoch(args, agent, phn, validator, validation_dataset, test_bat
     ray_list, param_dict_list = generate_params(phn, args.num_ray, agent.device)
     f_list = []
     for batch_idx, batch in tqdm(enumerate(validation_dataloader), desc=f'Validation epoch {epoch}'):
-        logprob_list, batch_f_list = solve_one_batch(agent, param_dict_list, batch)
+        logprob_list, batch_f_list, _ = solve_one_batch(agent, param_dict_list, batch)
         f_list += [batch_f_list] 
     f_list = np.concatenate(f_list,axis=0)
     nadir_points = np.max(f_list, axis=1)
@@ -139,24 +144,25 @@ def validate_one_epoch(args, agent, phn, validator, validation_dataset, test_bat
         tb_writer.add_scalar("Mean Delta Utopia", last_mean_delta_utopia, validator.epoch)
 
     # test
-    marker_list = [".","o","v","^","<",">","1","2","3","4"]
-    colors_list = [key for key in mcolors.TABLEAU_COLORS.keys()]
-    combination_list = [[c,m] for c in colors_list for m in marker_list]
+    # Define the light and dark blue colors
+    light_blue = mcolors.CSS4_COLORS['lightblue']
+    dark_blue = mcolors.CSS4_COLORS['darkblue']
+
+    # Create a linear gradient from light blue to dark blue
+    
     ray_list, param_dict_list = generate_params(phn, 50, agent.device)
-    logprobs_list, test_f_list = solve_one_batch(agent, param_dict_list, test_batch)
+    logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch)
+    gradient = np.linspace(0,1,len(param_dict_list))
+    colors = np.vstack((mcolors.to_rgba(light_blue), mcolors.to_rgba(dark_blue)))
+    my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
+
     plt.figure()
-    for i in range(len(param_dict_list)):
-        c = combination_list[i][0]
-        m = combination_list[i][1]
-        plt.scatter(test_f_list[0,i,0], test_f_list[0,i,1], c=c, marker=m)
+    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
     
-    logprobs_list, test_f_list = solve_one_batch(agent, param_dict_list, test_batch2)
+    logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch2)
     plt.figure()
-    for i in range(len(param_dict_list)):
-        c = combination_list[i][0]
-        m = combination_list[i][1]
-        plt.scatter(test_f_list[0,i,0], test_f_list[0,i,1], c=c, marker=m)
+    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
 
 
@@ -179,7 +185,7 @@ def init_phn_output(agent, phn, tb_writer, max_step=1000):
             po_weight = param.data.ravel()
             break
     po_weight = po_weight.detach().clone()
-    opt_init = torch.optim.Adam(phn.parameters(), lr=1e-4)
+    opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     for i in range(max_step):
         loss = initialize(po_weight,phn,opt_init,tb_writer)
         if loss < 1e-4:
