@@ -32,14 +32,14 @@ def train_one_epoch(args, agent:Agent, phn:PHN, opt, train_dataset, validator, v
         final_loss -= ld*total_cos_penalty
         update_phn(agent, phn, opt, final_loss)
         
-        if batch_idx % 5 == 0:
-            tb_writer.add_scalar("COS PENALTY", total_cos_penalty.cpu().item())
-            save_phn(phn, epoch, args.title)
-            validate_one_epoch(args, agent, phn, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
-            save_validator(validator, args.title)
-            print("IMPROVING?",validator.is_improving)
-            if not validator.is_improving:
-                exit()
+# if batch_idx % 5 == 0:
+    tb_writer.add_scalar("COS PENALTY", total_cos_penalty.cpu().item())
+    save_phn(phn, epoch, args.title)
+    validate_one_epoch(args, agent, phn, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
+    save_validator(validator, args.title)
+    print("IMPROVING?",validator.is_improving)
+    if not validator.is_improving:
+        exit()
             
     save_phn(phn, epoch, args.title)        
 
