@@ -23,9 +23,9 @@ def train_one_epoch(args, agent:Agent, phn:PHN, opt, train_dataset, validator, v
         ray_list, param_dict_list = generate_params(phn, args.num_ray, agent.device)
         logprob_list, batch_f_list, norm_batch_f_list = solve_one_batch(agent, param_dict_list, batch)
         agent.eval()
-        # with torch.no_grad():
-        #     greedy_logprob_list, greedy_batch_f_list = solve_one_batch(agent, param_dict_list, batch)
-        final_loss, total_cos_penalty = compute_loss(logprob_list, norm_batch_f_list, ray_list)
+        with torch.no_grad():
+            greedy_logprob_list, greedy_batch_f_list, greedy_batch_f_norm_list = solve_one_batch(agent, param_dict_list, batch)
+        final_loss, total_cos_penalty = compute_loss(logprob_list, norm_batch_f_list, greedy_batch_f_norm_list, ray_list)
         if init_stage:
             final_loss = 0
             # ld = 100

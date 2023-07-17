@@ -29,10 +29,10 @@ def get_hv_d(batch_f_list):
     hv_d_list = torch.cat(hv_d_list, dim=0)
     return hv_d_list
 
-def compute_loss(logprob_list, batch_f_list, ray_list):
+def compute_loss(logprob_list, batch_f_list, greedy_batch_f_list, ray_list):
     device = logprob_list.device
-    # A = batch_f_list-greedy_batch_f_list
-    A = batch_f_list
+    A = batch_f_list-greedy_batch_f_list
+    # A = batch_f_list
     nadir = np.max(A, axis=1, keepdims=True)
     utopia = np.min(A, axis=1, keepdims=True)
     denom = (nadir-utopia)
@@ -55,7 +55,8 @@ def compute_loss(logprob_list, batch_f_list, ray_list):
     final_loss = final_loss_per_ray.sum()
     
     ray_list = ray_list.unsqueeze(0).expand_as(loss_per_obj)
-    cos_penalty = cosine_similarity(norm_obj, ray_list, dim=2)*logprob_list.squeeze(-1)
+    A = torch.from_numpy(batch_f_list).to(logprob_list.device)
+    cos_penalty = cosine_similarity(A, ray_list, dim=2)*logprob_list.squeeze(-1)
     # A,B,_ = ray_list.shape
     # for a in range(A):
     #     for b in range(B):
