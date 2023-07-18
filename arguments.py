@@ -60,7 +60,7 @@ def get_parser():
     
     parser.add_argument('--ld',
                         type=float,
-                        default=0,
+                        default=4,
                         help="ld cosine sim penalty")
 
     # agent base or AM

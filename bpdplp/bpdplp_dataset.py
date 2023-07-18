@@ -111,4 +111,4 @@ class BPDPLP_Dataset(Dataset):
         norm_distance_matrix = self.norm_distance_matrix_list[index]
         road_types = self.road_types_list[index]
         max_capacity = mc
-        return nv, max_capacity, coords, norm_coords, demands, norm_demands, pt, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
+        return index, nv, max_capacity, coords, norm_coords, demands, norm_demands, pt, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types

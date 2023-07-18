@@ -70,14 +70,14 @@ class Agent(torch.nn.Module):
         _, num_vehicles, _ = vehicle_dynamic_features.shape
         n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
-        # if param_dict is not None:       
-        #     projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
-        #     node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
-        #     glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
-        # else:
-        projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
-        node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
-        glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        if param_dict is not None:       
+            projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
+            node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
+            glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        else:
+            projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
+            node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+            glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
         glimpse_V_dynamic = glimpse_V_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
@@ -94,15 +94,8 @@ class Agent(torch.nn.Module):
         compatibility = glimpse_Q@glimpse_K.permute(0,1,2,4,3).contiguous() / math.sqrt(glimpse_Q.size(-1)) # glimpse_K => n_heads, batch_size, num_items, embed_dim
         compatibility = compatibility + feasibility_mask.unsqueeze(0).unsqueeze(3).float().log()
         
-        # ini compatibility per vehicle untuk semua nodes
-        # tapi attention sebenarnya harus per batch
-        # jadi harus diflatten per batch, agar semua vec x customer jadi satu untuk disoftmax
         attention = torch.softmax(compatibility.view(n_heads,batch_size,num_vehicles*num_nodes),dim=-1).view_as(compatibility)
         heads = attention@glimpse_V
-        # harus check bener gak yang kayak gini
-        # kita concat vehicles across batch
-        # sama kita isolasi per batch, tapi vehicle x nodees diflatten
-        # kalau sama harusnya bener     
         concated_heads = heads.permute(1,2,3,0,4).contiguous()
         concated_heads = concated_heads.view(batch_size, num_vehicles, 1, self.embed_dim)
         if param_dict is not None:
@@ -129,9 +122,14 @@ class Agent(torch.nn.Module):
 
         Return: index of operations, log of probabilities
         '''
+        batch_size, _ = probs.shape
+        batch_idx = torch.arange(batch_size, device=self.device)
+        
         if self.training:
             dist = torch.distributions.Categorical(probs)
             op = dist.sample()
+            while torch.any(probs[batch_idx, op[:]]==0):
+                op = dist.sample()
             logprob = dist.log_prob(op)
             entropy = dist.entropy()
         else:
