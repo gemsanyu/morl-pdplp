@@ -211,20 +211,21 @@ def validate_one_epoch(args, agent, phn, validator, validation_dataset, test_bat
     
     # Create a linear gradient from light blue to dark blue
     
-    # ray_list, param_dict_list = generate_params(phn, 50, agent.device)
-    # logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch)
-    # gradient = np.linspace(0,1,len(param_dict_list))
-    # colors = np.vstack((mcolors.to_rgba(light_blue), mcolors.to_rgba(dark_blue)))
-    # my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
+    ray_list, param_dict_list = generate_params(phn, 50, agent.device)
+    logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch, None)
+    gradient = np.linspace(0,1,len(param_dict_list))
+    colors = np.vstack((mcolors.to_rgba(light_blue), mcolors.to_rgba(dark_blue)))
+    my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
     
-    # plt.figure()
-    # plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
-    # tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
-    
-    # logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch2)
-    # plt.figure()
-    # plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
-    # tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
+    plt.figure()
+    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
+    # test_batch = test_batch[1:]
+    tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
+    # test_batch2 = test_batch2[1:]
+    logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch2, None)
+    plt.figure()
+    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
+    tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
     validator.epoch +=1
 
 def initialize(param, phn, opt, tb_writer):
