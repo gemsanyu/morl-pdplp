@@ -1,10 +1,6 @@
 import math
 import pathlib
-import sys
 
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -39,7 +35,6 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
     nadir = np.concatenate(nadir, axis=0)
     utopia = np.concatenate(utopia, axis=0)
     A = batch_f_list-greedy_batch_f_list
-    A = batch_f_list
     denom = (nadir-utopia)
     denom[denom==0] = 1e-8
     norm_obj = (A-utopia)/denom
@@ -98,25 +93,31 @@ def update_phn(agent, phn, opt, final_loss):
     phn.zero_grad(set_to_none=True)
     opt.zero_grad(set_to_none=True)
     final_loss.backward()
-    torch.nn.utils.clip_grad_norm_(phn.parameters(), max_norm=1)
+    torch.nn.utils.clip_grad_norm_(phn.parameters(), max_norm=0.5)
     opt.step()
 
-def generate_params(phn, num_ray, device):
+def get_ray_list(num_ray, device, is_random=True):
     ray_list = []
-
-    param_dict_list = []
     for i in range(num_ray):
-        start, end = 0.1, np.pi/2-0.1
-        r = np.random.uniform(start + i*(end-start)/num_ray, start+ (i+1)*(end-start)/num_ray)
-        ray = np.array([np.cos(r),np.sin(r)], dtype='float32')
-        ray /= ray.sum()
-        ray *= np.random.randint(1, 5)*abs(np.random.normal(1, 0.2))
-        ray = torch.from_numpy(ray).to(device)
-        param_dict = phn(ray)
-        param_dict_list += [param_dict]
+        if is_random:
+            start, end = 0.1, np.pi/2-0.1
+            r = np.random.uniform(start + i*(end-start)/num_ray, start+ (i+1)*(end-start)/num_ray)
+            ray = np.array([np.cos(r),np.sin(r)], dtype='float32')
+            ray /= ray.sum()
+            ray *= np.random.randint(1, 5)*abs(np.random.normal(1, 0.2))
+        else:
+            ray = np.asanyarray([float(i)/float(num_ray-1), float(num_ray-1-i)/float(num_ray-1)], dtype=float)
+        ray = torch.from_numpy(ray).to(device, dtype=torch.float32)
         ray_list += [ray]
     ray_list = torch.stack(ray_list)
-    return ray_list, param_dict_list
+    return ray_list
+
+def generate_params(phn, ray_list):
+    param_dict_list = []
+    for ray in ray_list:
+        param_dict = phn(ray)
+        param_dict_list += [param_dict]
+    return param_dict_list
 
 def solve_one_batch(agent, param_dict_list, batch, nondom_list):
     idx_list = batch[0]
@@ -155,78 +156,7 @@ def solve_one_batch(agent, param_dict_list, batch, nondom_list):
 
     return logprob_list, batch_f_list, nondom_list
 
-@torch.no_grad()        
-def validate_one_epoch(args, agent, phn, validator, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
-    agent.eval()
-    # Define the light and dark blue colors
-    light_blue = mcolors.CSS4_COLORS['lightblue']
-    dark_blue = mcolors.CSS4_COLORS['darkblue']
-    matplotlib.use('Agg')
 
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
-    
-    ray_list, param_dict_list = generate_params(phn, 50, agent.device)
-    f_list = []
-    logprobs = []
-    for batch_idx, batch in tqdm(enumerate(validation_dataloader), desc=f'Validation epoch {epoch}'):
-        logprob_list, batch_f_list, _ = solve_one_batch(agent, param_dict_list, batch, None)
-        f_list += [batch_f_list] 
-        logprobs += [logprob_list]
-    f_list = np.concatenate(f_list,axis=0)
-    logprobs = torch.concatenate(logprobs, dim=0)
-    # _, total_cos_penalty = compute_loss(logprob_list, norm_f_list, norm_f_list, ray_list)
-    # plot 1 or 2 from validation?
-    gradient = np.linspace(0,1,len(param_dict_list))
-    colors = np.vstack((mcolors.to_rgba(light_blue), mcolors.to_rgba(dark_blue)))
-    my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
-    plt.figure()
-    plt.scatter(f_list[0,:,0], f_list[0,:,1], c=gradient, cmap=my_cmap)
-    tb_writer.add_figure("Solutions Validation 1", plt.gcf(), validator.epoch)
-    
-    plt.figure()
-    plt.scatter(f_list[1,:,0], f_list[1,:,1], c=gradient, cmap=my_cmap)
-    tb_writer.add_figure("Solutions Validation 2", plt.gcf(), validator.epoch)
-    # validator.epoch+=1
-    # nadir_points = np.max(f_list, axis=1)
-    # utopia_points = np.min(f_list, axis=1)
-    # validator.insert_new_ref_points(nadir_points, utopia_points)
-
-    # nd_solutions_list = []
-    # for i in range(len(validation_dataset)):
-    #     nondom_idx = fast_non_dominated_sort(f_list[i,:,:])[0]
-    #     nd_solutions = f_list[i, nondom_idx, :]
-    #     nd_solutions_list += [nd_solutions]
-    # validator.insert_new_nd_solutions(nd_solutions_list)
-    
-
-    # last_mean_running_igd = validator.get_last_mean_running_igd()
-    # if last_mean_running_igd is not None:
-    #     tb_writer.add_scalar("Mean Running IGD", last_mean_running_igd, validator.epoch)
-    # last_mean_delta_nadir, last_mean_delta_utopia = validator.get_last_delta_refpoints()
-    # if last_mean_delta_nadir is not None:
-    #     tb_writer.add_scalar("Mean Delta Nadir", last_mean_delta_nadir, validator.epoch)
-    #     tb_writer.add_scalar("Mean Delta Utopia", last_mean_delta_utopia, validator.epoch)
-
-    # test
-    
-    # Create a linear gradient from light blue to dark blue
-    
-    ray_list, param_dict_list = generate_params(phn, 50, agent.device)
-    logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch, None)
-    gradient = np.linspace(0,1,len(param_dict_list))
-    colors = np.vstack((mcolors.to_rgba(light_blue), mcolors.to_rgba(dark_blue)))
-    my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
-    
-    plt.figure()
-    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
-    # test_batch = test_batch[1:]
-    tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
-    # test_batch2 = test_batch2[1:]
-    logprobs_list, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch2, None)
-    plt.figure()
-    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
-    tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), validator.epoch)
-    validator.epoch +=1
 
 def initialize(param, phn, opt, tb_writer):
     ray = np.asanyarray([[0.5,0.5]],dtype=float)
@@ -290,13 +220,18 @@ def save_policy(policy, epoch, title):
     checkpoint_backup_path = checkpoint_path.parent /(checkpoint_path.name + "_")
     torch.save(checkpoint, checkpoint_backup_path.absolute())
 
-def save_phn(phn, epoch, title):
+def save_phn(title, epoch, phn, critic_phn, opt, training_nondom_list, validation_nondom_list, critic_solution_list):
     checkpoint_root = "checkpoints"
     checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_dir/(title+".pt")
     checkpoint = {
         "phn_state_dict":phn.state_dict(),
+        "critic_phn_state_dict":critic_phn.state_dict(),
+        "opt_state_dict":opt.state_dict(),
+        "training_nondom_list":training_nondom_list,
+        "validation_nondom_list":validation_nondom_list,
+        "critic_solution_list":critic_solution_list,
         "epoch":epoch,
     }
     # save twice to prevent failed saving,,, damn
