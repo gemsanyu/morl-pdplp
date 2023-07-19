@@ -28,13 +28,16 @@ def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos
     tb_writer.add_scalar("Cos Penalty Loss", cos_penalty_loss_list.mean(), epoch)
     
 def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
+    small_batch = 4
+    real_batch = args.batch_size
+    train_dataloader = DataLoader(train_dataset, batch_size=small_batch, shuffle=True, pin_memory=True, num_workers=2)
     ld = 10 if init_stage else args.ld 
     if training_nondom_list is None:
         training_nondom_list = [None for i in range(len(train_dataset))]
     cos_penalty_loss_list = []
     hv_loss_list = []
     spread_loss_list = []
+    num_batch = 0
     for _, batch in tqdm(enumerate(train_dataloader), desc=f'Training epoch {epoch}'):
         ray_list =  get_ray_list(args.num_ray, agent.device)
         # get solutions
@@ -53,7 +56,10 @@ def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_da
         if init_stage:
             final_loss = 0
         final_loss -= ld*cos_penalty_loss
-        update_phn(agent, phn, opt, final_loss)
+        final_loss.backward()
+        num_batch += small_batch
+        if num_batch % real_batch == 0:
+            update_phn(agent, phn, opt, final_loss)
         hv_loss_list += [hv_loss.detach().cpu().numpy()]
         spread_loss_list += [spread_loss.detach().cpu().numpy()]
         cos_penalty_loss_list += [cos_penalty_loss.detach().cpu().numpy()]

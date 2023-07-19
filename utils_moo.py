@@ -89,12 +89,12 @@ def compute_spread_loss(logprobs, training_nondom_list, idx_list, f_list):
     return spread_loss
 
 def update_phn(agent, phn, opt, final_loss):
+    torch.nn.utils.clip_grad_norm_(phn.parameters(), max_norm=0.5)
+    opt.step()
     agent.zero_grad(set_to_none=True)
     phn.zero_grad(set_to_none=True)
     opt.zero_grad(set_to_none=True)
-    final_loss.backward()
-    torch.nn.utils.clip_grad_norm_(phn.parameters(), max_norm=0.5)
-    opt.step()
+    
 
 def get_ray_list(num_ray, device, is_random=True):
     ray_list = []
