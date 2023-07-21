@@ -15,7 +15,7 @@ NUM_NODE_STATIC_FEATURES = 4
 NUM_VEHICLE_DYNAMIC_FEATURES = 2
 NUM_NODE_DYNAMIC_FEATURES = 1
 
-def get_agent(args, agent_checkpoint_path:pathlib.Path) -> Agent:
+def get_agent(args) -> Agent:
     agent = Agent(num_node_static_features=NUM_NODE_STATIC_FEATURES,
                   num_vehicle_dynamic_features=NUM_VEHICLE_DYNAMIC_FEATURES,
                   num_node_dynamic_features=NUM_NODE_DYNAMIC_FEATURES,
@@ -46,8 +46,8 @@ def setup_phn(args, load_best=False, validation=False):
     checkpoint_root = "checkpoints"
     checkpoint_dir = pathlib.Path(".")/checkpoint_root/args.title
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    agent_checkpoint_path = checkpoint_dir/(args.title+"_agent.pt")
-    agent = get_agent(args, agent_checkpoint_path)
+    agent = get_agent(args)
+    critic = get_agent(args)
     
     checkpoint_path = checkpoint_dir/(args.title+".pt")
     if load_best:
@@ -60,14 +60,20 @@ def setup_phn(args, load_best=False, validation=False):
         print("CHECKPOINT NOT FOUND! new run?")
 
     phn = get_phn(args, args.embed_dim)
+    critic_phn = get_phn(args, args.embed_dim)
     training_nondom_list = None
     validation_nondom_list = None
+    critic_solution_list = None
     params = list(phn.parameters()) + list(agent.gae.parameters())
     opt = torch.optim.Adam(params, args.lr, weight_decay=1e-6)
     last_epoch = 0
 
     if checkpoint is not None:
+        agent.load_state_dict(checkpoint["agent_state_dict"])
+        critic.load_state_dict(checkpoint["critic_state_dict"])
         phn.load_state_dict(checkpoint["phn_state_dict"])
+        critic_phn.load_state_dict(checkpoint["critic_phn_state_dict"])
+        critic_solution_list = checkpoint["critic_nondom_list"]
         training_nondom_list = checkpoint["training_nondom_list"]
         validation_nondom_list = checkpoint["validation_nondom_list"]
         last_epoch = checkpoint["epoch"] 
@@ -76,4 +82,4 @@ def setup_phn(args, load_best=False, validation=False):
     test_batch = instance_to_batch(test_instance)
     test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
     test_batch2 = instance_to_batch(test_instance2)
-    return agent, phn, training_nondom_list, validation_nondom_list, opt, tb_writer, test_batch, test_batch2, last_epoch
+    return agent, critic, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch

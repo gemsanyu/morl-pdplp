@@ -238,8 +238,8 @@ class BPDPLP_Env(object):
         #just send the vehicle to the node
         # selected_nodes = np.asanyarray(selected_nodes)
         # selected_vecs = np.asanyarray(selected_vecs)
-        self.service_node_by_vec(batch_idx, selected_vecs, selected_nodes)
-
+        reward = self.service_node_by_vec(batch_idx, selected_vecs, selected_nodes)
+        return *self.get_state(), reward
 
     """
         needs to be updated: current location, current time, current load, request assignment
@@ -249,6 +249,7 @@ class BPDPLP_Env(object):
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
+        f1 = travel_time_vecs
         self.is_node_visited[batch_idx, selected_nodes] = True
         # isnp -> is_selected_node_pickup
         # assign the request to the vehicles
@@ -268,10 +269,11 @@ class BPDPLP_Env(object):
         self.departure_time_list[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = self.current_time[batch_idx, selected_vecs]
         #add to travel time to current time
         self.current_time[batch_idx, selected_vecs] += travel_time_vecs
-
+        
         # now filter the actions or the selected vehicles based on their current time
         # if early, then ceil,
-        # if late, then add to penalty  
+        # if late, then add to penalty
+        f2 = np.zeros_like(f1)
         selected_vecs_current_time = self.current_time[batch_idx, selected_vecs]
         selected_nodes_tw = self.time_windows[batch_idx, selected_nodes]
         is_too_early = selected_vecs_current_time <= selected_nodes_tw[:,0]
@@ -279,7 +281,9 @@ class BPDPLP_Env(object):
             self.current_time[batch_idx[is_too_early], selected_vecs[is_too_early]] = selected_nodes_tw[is_too_early,0]
         is_too_late = selected_vecs_current_time > selected_nodes_tw[:,1]
         if np.any(is_too_late):
-            self.late_penalty[batch_idx[is_too_late], selected_vecs[is_too_late]] += (selected_vecs_current_time[is_too_late]-selected_nodes_tw[is_too_late,1])
+            late_penalty = (selected_vecs_current_time[is_too_late]-selected_nodes_tw[is_too_late,1])
+            self.late_penalty[batch_idx[is_too_late], selected_vecs[is_too_late]] += late_penalty
+            f2[is_too_late] = late_penalty
             # exit()
         self.arrived_time[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = self.current_time[batch_idx, selected_vecs]
         self.travel_cost[batch_idx, selected_vecs] += travel_time_vecs 
@@ -287,6 +291,7 @@ class BPDPLP_Env(object):
         # after arriving, and start service, add service time to current time
         self.current_time[batch_idx, selected_vecs] += self.service_durations[batch_idx, selected_nodes]
         self.travel_time_list = self.get_travel_time()
+        return np.concatenate([f1[:, np.newaxis], f2[:, np.newaxis]], axis=-1)
 
     def get_state(self):
         return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 

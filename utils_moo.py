@@ -26,25 +26,26 @@ def get_hv_d(batch_f_list):
     hv_d_list = torch.cat(hv_d_list, dim=0)
     return hv_d_list
 
-def compute_loss(logprobs, training_nondom_list, idx_list, f_list, ray):
+def compute_loss(logprobs, training_nondom_list, idx_list, reward_list, ray):
     device = logprobs.device
     nadir = []
     utopia = []
-    for i in range(len(f_list)):
+    for i in range(len(reward_list)):
         nondom_sols =  training_nondom_list[idx_list[i]]
         nadir += [np.max(nondom_sols, axis=0, keepdims=True)]
         utopia += [np.min(nondom_sols, axis=0, keepdims=True)]
-    nadir = np.concatenate(nadir, axis=0)
-    utopia = np.concatenate(utopia, axis=0)
+    nadir = np.concatenate(nadir, axis=0)[:,np.newaxis,:]
+    utopia = np.concatenate(utopia, axis=0)[:,np.newaxis,:]
+    
     denom = nadir-utopia
     denom[denom==0]=1e-8
-    norm_obj = (f_list-utopia)/denom
-    norm_obj = torch.from_numpy(norm_obj).to(device)
-    ray = ray.unsqueeze(0)
-    tch_reward = ray*(norm_obj)
+    norm_reward = (reward_list-utopia)/denom
+    norm_reward = torch.from_numpy(norm_reward).to(device)
+    ray = ray[None, None, :]
+    tch_reward = ray*(norm_reward)
     tch_reward, _ = tch_reward.max(dim=-1)
-    # tch_advantage = tch_reward - tch_reward.mean()
-    loss = tch_reward*logprobs
+    tch_advantage = tch_reward - tch_reward.mean(dim=1, keepdim=True)
+    loss = tch_advantage*logprobs
     loss = loss.mean()
     return loss
 
@@ -71,12 +72,12 @@ def compute_spread_loss(logprobs, training_nondom_list, idx_list, f_list):
     return spread_loss
 
 def update_phn(agent, phn, opt, final_loss):
-    agent.zero_grad(set_to_none=True)
-    phn.zero_grad(set_to_none=True)
-    opt.zero_grad(set_to_none=True)
     final_loss.backward()
     torch.nn.utils.clip_grad_norm_(phn.parameters(), max_norm=0.5)
     opt.step()
+    agent.zero_grad(set_to_none=True)
+    phn.zero_grad(set_to_none=True)
+    opt.zero_grad(set_to_none=True)
 
 def get_ray_list(num_ray, device, is_random=True):
     ray_list = []
@@ -118,11 +119,11 @@ def solve_one_batch(agent, param_dict, batch, nondom_list):
     node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
 
     solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
-    tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies = solve_results
+    tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, logprob_list, sum_entropies = solve_results
     f_list = np.concatenate([travel_costs[:,np.newaxis], late_penalties[:,np.newaxis]], axis=1)
 
     if nondom_list is None:
-        return sum_logprobs, f_list, None
+        return logprob_list, f_list, reward_list, None
     
     for i in range(env.batch_size):
         idx = idx_list[i]
@@ -135,78 +136,16 @@ def solve_one_batch(agent, param_dict, batch, nondom_list):
             I = fast_non_dominated_sort(nondom_old)[0]
             nondom_list[idx] = nondom_old[I]
 
-    return sum_logprobs, f_list, nondom_list
+    return logprob_list, f_list, reward_list, nondom_list
 
-
-
-def initialize(param, phn, opt, tb_writer):
-    ray = np.asanyarray([[0.5,0.5]],dtype=float)
-    ray = torch.from_numpy(ray).to(phn.device, dtype=torch.float32)
-    param_dict = phn(ray)
-    pcs_weight = (param_dict["pcs_weight"]).ravel()
-    pns_weight = (param_dict["pns_weight"]).ravel()
-    po_weight = (param_dict["po_weight"]).ravel()
-    weights = torch.concatenate([pcs_weight,pns_weight,po_weight], dim=0)
-    loss = torch.norm(weights-param)
-    opt.zero_grad(set_to_none=True)
-    tb_writer.add_scalar("Initialization loss", loss.cpu().item())
-    loss.backward()
-    opt.step()
-    return loss.cpu().item()
-
-def init_phn_output(agent, phn, tb_writer, max_step=1000):
-    po_weight = None
-    pcs_weight = None
-    pns_weight = None
-    for name, param in agent.named_parameters():
-        if name == "project_out.weight":
-            po_weight = param.data.ravel()
-        if name == "project_current_vehicle_state.weight":
-            pcs_weight = param.data.ravel()
-        if name == 'project_node_state.weight':
-            pns_weight = param.data.ravel()
-        
-    pcs_weight = pcs_weight.detach().clone()
-    pns_weight = pns_weight.detach().clone()
-    po_weight = po_weight.detach().clone()
-    weights = torch.concatenate([pcs_weight, pns_weight, po_weight], dim=0)
-    opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
-    for i in range(max_step):
-        loss = initialize(weights,phn,opt_init,tb_writer)
-        if loss < 1e-4:
-            break
-
-def update_policy(policy_type:str, policy:Policy, sample_list, score_list):
-    if policy_type == "r1-nes":
-        # score_list = np.concatenate(score_list, axis=1)
-        # score_list = np.mean(score_list, axis=1, keepdims=True)
-        x_list = sample_list - policy.mu
-        w_list = x_list/math.exp(policy.ld)
-        policy.update(w_list, x_list, score_list)
-    elif policy_type == "crfmnes":
-        policy.update(sample_list, score_list)
-    return policy
-
-def save_policy(policy, epoch, title):
+def save_phn(title, epoch, agent, critic, phn, critic_phn, opt, training_nondom_list, validation_nondom_list, critic_solution_list):
     checkpoint_root = "checkpoints"
     checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_dir/(title+".pt")
     checkpoint = {
-        "policy":policy,
-        "epoch":epoch,
-    }
-    # save twice to prevent failed saving,,, damn
-    torch.save(checkpoint, checkpoint_path.absolute())
-    checkpoint_backup_path = checkpoint_path.parent /(checkpoint_path.name + "_")
-    torch.save(checkpoint, checkpoint_backup_path.absolute())
-
-def save_phn(title, epoch, phn, critic_phn, opt, training_nondom_list, validation_nondom_list, critic_solution_list):
-    checkpoint_root = "checkpoints"
-    checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_path = checkpoint_dir/(title+".pt")
-    checkpoint = {
+        "agent_state_dict": agent.state_dict(),
+        "critic_state_dict": critic.state_dict(),
         "phn_state_dict":phn.state_dict(),
         "critic_phn_state_dict":critic_phn.state_dict(),
         "opt_state_dict":opt.state_dict(),

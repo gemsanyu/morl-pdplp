@@ -86,6 +86,8 @@ def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, gli
     glimpse_K_static = glimpse_K_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
     logits_K_static = logits_K_static.unsqueeze(1).expand(-1,max_num_vehicles,-1,-1)
     fixed_context = fixed_context.unsqueeze(1).expand(-1,max_num_vehicles,-1)
+    reward_list = []
+    logprob_list = []
     while torch.any(feasibility_mask):
         # print("vec features", torch.any(torch.isnan(vehicle_dynamic_features)))
         # print("node features", torch.any(torch.isnan(node_dynamic_features)))
@@ -101,19 +103,22 @@ def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, gli
                                         logits_K_static,
                                         feasibility_mask,
                                         param_dict=param_dict)
-        selected_vecs, selected_nodes, logprob_list, entropy_list = forward_results
+        selected_vecs, selected_nodes, logprobs, entropy_list = forward_results
         selected_vecs = selected_vecs.cpu().numpy()
         selected_nodes = selected_nodes.cpu().numpy()
-        env.act(batch_idx, selected_vecs, selected_nodes)
-        sum_logprobs += logprob_list
+        vehicle_dynamic_features, node_dynamic_features, feasibility_mask, reward = env.act(batch_idx, selected_vecs, selected_nodes)
+        # sum_logprobs += logprobs
+        logprob_list += [logprobs[:, np.newaxis]]
+        reward_list += [reward[:, np.newaxis, :]]
         sum_entropies += entropy_list
-        vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
+        # vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
         vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device, dtype=torch.float32)
         node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device, dtype=torch.float32)
         feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
-        
+    reward_list = np.concatenate(reward_list, axis=1)
+    logprob_list = torch.concatenate(logprob_list, dim=1)
     tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties = env.finish()
-    return tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies
+    return tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, logprob_list, sum_entropies
 
 def save(agent, agent_opt, validation_score, epoch, title):
     checkpoint_root = "checkpoints"
