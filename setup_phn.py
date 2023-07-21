@@ -25,9 +25,6 @@ def get_agent(args, agent_checkpoint_path:pathlib.Path) -> Agent:
                   gae_ff_hidden=args.gae_ff_hidden,
                   tanh_clip=args.tanh_clip,
                   device=args.device)
-
-    checkpoint = torch.load(agent_checkpoint_path.absolute(), map_location=CPU_DEVICE)
-    agent.load_state_dict(checkpoint["agent_state_dict"])
     return agent
     
 def get_tb_writer(args, validation=True)->SummaryWriter:
@@ -63,23 +60,20 @@ def setup_phn(args, load_best=False, validation=False):
         print("CHECKPOINT NOT FOUND! new run?")
 
     phn = get_phn(args, args.embed_dim)
-    critic_phn = get_phn(args, args.embed_dim)
     training_nondom_list = None
     validation_nondom_list = None
-    critic_solution_list = None
-    opt = torch.optim.Adam(phn.parameters(), args.lr)
+    params = list(phn.parameters()) + list(agent.gae.parameters())
+    opt = torch.optim.Adam(params, args.lr, weight_decay=1e-6)
     last_epoch = 0
 
     if checkpoint is not None:
-        critic_phn.load_state_dict(checkpoint["critic_phn_state_dict"])
         phn.load_state_dict(checkpoint["phn_state_dict"])
         training_nondom_list = checkpoint["training_nondom_list"]
         validation_nondom_list = checkpoint["validation_nondom_list"]
-        critic_solution_list = checkpoint["critic_solution_list"]
         last_epoch = checkpoint["epoch"] 
         
     test_instance = BPDPLP(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
     test_batch = instance_to_batch(test_instance)
     test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
     test_batch2 = instance_to_batch(test_instance2)
-    return agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch
+    return agent, phn, training_nondom_list, validation_nondom_list, opt, tb_writer, test_batch, test_batch2, last_epoch

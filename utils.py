@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from arguments import get_parser
 from bpdplp.bpdplp_env import BPDPLP_Env
@@ -35,7 +36,7 @@ def instance_to_batch(instance:BPDPLP)->BPDPLP_Env:
     return 0, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
     
 
-def encode(agent, static_features):
+def encode(agent, static_features, param_dict):
     num_requests = int((static_features.shape[1]-1)//2)
     depot_static_features = static_features[:, 0].unsqueeze(1)
     delivery_static_features = static_features[:,num_requests+1:]
@@ -45,13 +46,12 @@ def encode(agent, static_features):
     delivery_init_embedding = agent.delivery_embedder(delivery_static_features)
     node_init_embeddings = torch.concat([depot_init_embedding, pickup_init_embedding, delivery_init_embedding], dim=1)
     node_embeddings, graph_embeddings = agent.gae(node_init_embeddings)
-    fixed_context = agent.project_fixed_context(graph_embeddings)
-    glimpse_K_static, glimpse_V_static, logits_K_static = agent.project_embeddings(node_embeddings).chunk(3, dim=-1)
+    fixed_context = F.linear(graph_embeddings, param_dict["pf_weight"])
+    projected_embeddings = F.linear(node_embeddings, param_dict["pe_weight"])
+    glimpse_K_static, glimpse_V_static, logits_K_static = projected_embeddings.chunk(3, dim=-1)
     glimpse_K_static = agent._make_heads(glimpse_K_static)
     glimpse_V_static = agent._make_heads(glimpse_V_static)
     return node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static
-
-
 
 """
 the features/components associated with vehicles

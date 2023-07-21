@@ -3,6 +3,8 @@ import pathlib
 
 import numpy as np
 import torch
+import random
+
 from torch.utils.data import DataLoader
 from torch.nn.functional import cosine_similarity
 from tqdm import tqdm
@@ -24,47 +26,27 @@ def get_hv_d(batch_f_list):
     hv_d_list = torch.cat(hv_d_list, dim=0)
     return hv_d_list
 
-def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, greedy_batch_f_list, ray_list):
-    device = logprob_list.device
+def compute_loss(logprobs, training_nondom_list, idx_list, f_list, ray):
+    device = logprobs.device
     nadir = []
     utopia = []
-    for i in range(len(batch_f_list)):
+    for i in range(len(f_list)):
         nondom_sols =  training_nondom_list[idx_list[i]]
-        nadir += [np.max(nondom_sols, axis=0, keepdims=True)[np.newaxis,:]]
-        utopia += [np.min(nondom_sols, axis=0, keepdims=True)[np.newaxis,:]]
+        nadir += [np.max(nondom_sols, axis=0, keepdims=True)]
+        utopia += [np.min(nondom_sols, axis=0, keepdims=True)]
     nadir = np.concatenate(nadir, axis=0)
     utopia = np.concatenate(utopia, axis=0)
-    A = batch_f_list-greedy_batch_f_list
-    denom = (nadir-utopia)
-    denom[denom==0] = 1e-8
-    norm_obj = (A-utopia)/denom
-    norm_obj = batch_f_list
-    hv_d_list = get_hv_d(norm_obj)
-    
-    # compute loss now
-    hv_d_list = hv_d_list.to(device)
+    denom = nadir-utopia
+    denom[denom==0]=1e-8
+    norm_obj = (f_list-utopia)/denom
     norm_obj = torch.from_numpy(norm_obj).to(device)
-    A = torch.from_numpy(A.copy()).to(device)
-    # A -= A.mean(dim=1,keepdim=True)
-    norm_obj -= norm_obj.mean(dim=1, keepdim=True)
-    logprob_list = logprob_list.unsqueeze(2)
-    loss_per_obj = logprob_list*norm_obj
-    final_loss_per_obj = loss_per_obj*hv_d_list
-    final_loss_per_instance = final_loss_per_obj.sum(dim=2)
-    final_loss_per_ray = final_loss_per_instance.mean(dim=0)
-    final_loss = final_loss_per_ray.sum()
-    
-    ray_list = ray_list.unsqueeze(0).expand_as(loss_per_obj)
-    A = torch.from_numpy(batch_f_list).to(logprob_list.device)
-    cos_penalty = cosine_similarity(A, ray_list, dim=2)*logprob_list.squeeze(-1)
-    # A,B,_ = ray_list.shape
-    # for a in range(A):
-    #     for b in range(B):
-    #         print(ray_list[a,b,:].numpy(), norm_obj[a,b,:].numpy(), cos_penalty[a,b].detach().numpy())
-    # exit()
-    cos_penalty_per_ray = cos_penalty.mean(dim=0)
-    total_cos_penalty = cos_penalty_per_ray.sum()
-    return final_loss, total_cos_penalty
+    ray = ray.unsqueeze(0)
+    tch_reward = ray*(norm_obj)
+    tch_reward, _ = tch_reward.max(dim=-1)
+    # tch_advantage = tch_reward - tch_reward.mean()
+    loss = tch_reward*logprobs
+    loss = loss.mean()
+    return loss
 
 def compute_spread_loss(logprobs, training_nondom_list, idx_list, f_list):
     # param_list = [param_dict["v1"].ravel().unsqueeze(0) for param_dict in param_dict_list]
@@ -112,6 +94,12 @@ def get_ray_list(num_ray, device, is_random=True):
     ray_list = torch.stack(ray_list)
     return ray_list
 
+def get_ray(device):
+    r = random.random()
+    ray = np.array([r,1-r], np.float32)
+    ray = torch.from_numpy(ray).to(device)
+    return ray
+
 def generate_params(phn, ray_list):
     param_dict_list = []
     for ray in ray_list:
@@ -119,42 +107,35 @@ def generate_params(phn, ray_list):
         param_dict_list += [param_dict]
     return param_dict_list
 
-def solve_one_batch(agent, param_dict_list, batch, nondom_list):
+def solve_one_batch(agent, param_dict, batch, nondom_list):
     idx_list = batch[0]
     batch = batch[1:]
     num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
     env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
     static_features,_,_,_ = env.begin()
     static_features = torch.from_numpy(static_features).to(agent.device)
-    encode_results = encode(agent, static_features)
+    encode_results = encode(agent, static_features, param_dict)
     node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
 
-    batch_f_list = [] 
-    logprob_list = []
-    for param_dict in param_dict_list:
-        solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
-        tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies = solve_results
-        f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
-        batch_f_list += [f_list]
-        logprob_list += [sum_logprobs.unsqueeze(1)]
-    logprob_list = torch.cat(logprob_list, dim=1)
-    batch_f_list = np.concatenate(batch_f_list, axis=1)
+    solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
+    tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies = solve_results
+    f_list = np.concatenate([travel_costs[:,np.newaxis], late_penalties[:,np.newaxis]], axis=1)
+
     if nondom_list is None:
-        return logprob_list, batch_f_list, None
+        return sum_logprobs, f_list, None
     
     for i in range(env.batch_size):
         idx = idx_list[i]
         if nondom_list[idx] is None:
-            I = fast_non_dominated_sort(batch_f_list[i,:])[0]
-            nondom = batch_f_list[i, I, :]
+            nondom = f_list[i, np.newaxis, :]
             nondom_list[idx] = nondom
         else:
             nondom_old = nondom_list[idx]
-            nondom_old = np.concatenate([nondom_old, batch_f_list[i,:]])
+            nondom_old = np.concatenate([nondom_old, f_list[i, np.newaxis, :]])
             I = fast_non_dominated_sort(nondom_old)[0]
             nondom_list[idx] = nondom_old[I]
 
-    return logprob_list, batch_f_list, nondom_list
+    return sum_logprobs, f_list, nondom_list
 
 
 
