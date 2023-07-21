@@ -354,7 +354,7 @@ class GraphAttentionEncoder(nn.Module):
             embed_dim,
             n_layers,
             node_dim=None,
-            normalization='batch',
+            normalization='instance',
             feed_forward_hidden=512
     ):
         super(GraphAttentionEncoder, self).__init__()
