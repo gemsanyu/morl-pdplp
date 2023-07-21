@@ -14,36 +14,6 @@ from bpdplp.bpdplp_dataset import BPDPLP_Dataset
 from utils import encode, solve_decode_only, update
 from utils import save, prepare_args
 from setup import setup
-
-@torch.no_grad()
-def validate_one_epoch(args, agent, validation_dataset, tb_writer, epoch):
-    agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True)
-    sum_validation_travel_costs = 0
-    sum_validation_penalties = 0
-    sum_validation_entropies = 0
-    sum_validation_logprobs = 0
-    
-    for batch_idx, batch in tqdm(enumerate(validation_dataloader)):
-        num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
-        env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
-        static_features,_,_,_ = env.begin()
-        static_features = torch.from_numpy(static_features).to(agent.device)
-        encode_results = encode(agent, static_features)
-        node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
-        solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
-        tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies = solve_results
-        sum_validation_travel_costs += travel_costs.sum()
-        sum_validation_penalties += late_penalties .sum()
-        sum_validation_entropies += sum_entropies.sum().cpu()
-        sum_validation_logprobs += sum_logprobs.sum().cpu()
-    mean_validation_travel_costs = sum_validation_travel_costs/args.num_validation_samples
-    mean_penalties = sum_validation_penalties/args.num_validation_samples
-    tb_writer.add_scalar("Validation Travel Costs "+args.title, mean_validation_travel_costs, epoch)
-    tb_writer.add_scalar("Validation Late Penalties "+args.title, mean_penalties, epoch)
-    tb_writer.add_scalar("Validation Entropies "+args.title, sum_validation_entropies/args.num_validation_samples, epoch)
-    validation_score = mean_validation_travel_costs + mean_penalties
-    return validation_score
         
 def train_one_epoch(args, agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
