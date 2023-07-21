@@ -152,7 +152,7 @@ def validate_with_test(agent, phn, test_batch, test_batch2, tb_writer, epoch):
 
 def run(args):
     agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch = setup_phn(args)
-    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
+    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation", num_vehicles_list = [1,3,5], num_clusters_list = [3,5,8])
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
     init_phn_output(agent, phn, tb_writer, max_step=1000)
     init_epoch = 1
