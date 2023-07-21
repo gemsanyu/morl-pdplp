@@ -101,7 +101,7 @@ def validate_one_epoch(agent, validation_dataset, best_validation_score, best_ag
 
 def run(args):
     agent, opt, best_agent_state_dict, best_validation_score, tb_writer, last_epoch = setup(args)
-    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
+    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation", num_vehicles_list=[1,3,5], num_clusters_list=[3,5,8])
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
     
     for epoch in range(last_epoch+1, args.max_epoch):
