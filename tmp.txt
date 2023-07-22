@@ -43,19 +43,37 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
     logprob_list = logprob_list.unsqueeze(2)
     loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
     hv_d_list = get_hv_d(loss_per_obj.detach().cpu().numpy())
-    hv_d_list = hv_d_list.to(device)
-    hv_loss_per_obj = loss_per_obj*hv_d_list
-    hv_loss_per_instance = hv_loss_per_obj.sum(dim=2)
-    hv_loss_per_ray = hv_loss_per_instance.mean(dim=0)
-    hv_loss = hv_loss_per_ray.sum()
-    loss_min, _ = hv_loss_per_obj.min(dim=1, keepdim=True)
-    loss_max, _ = hv_loss_per_obj.max(dim=1, keepdim=True)
-    hv_loss_per_obj_norm = (hv_loss_per_obj-loss_min)/loss_max
-    ray_list = ray_list.unsqueeze(0).expand_as(hv_loss_per_obj_norm)
-    cos_penalty = cosine_similarity(hv_loss_per_obj_norm, ray_list, dim=2)*logprob_list.squeeze(-1)
+    # print(logprob_list.shape, norm_obj.shape)
+    # exit()
+
+    # hv_d_list = get_hv_d(norm_obj)
+    
+    # compute loss now
+    # hv_d_list = hv_d_list.to(device)
+    # norm_obj = torch.from_numpy(norm_obj).to(device)
+    # A = torch.from_numpy(A.copy()).to(device)
+    # # A -= A.mean(dim=1,keepdim=True)
+    # norm_obj -= norm_obj.mean(dim=1, keepdim=True)
+    # logprob_list = logprob_list.unsqueeze(2)
+    # loss_per_obj = logprob_list*norm_obj
+    # final_loss_per_obj = loss_per_obj*hv_d_list
+    # final_loss_per_instance = final_loss_per_obj.sum(dim=2)
+    # final_loss_per_ray = final_loss_per_instance.mean(dim=0)
+    # final_loss = final_loss_per_ray.sum()
+    
+    ray_list = ray_list.unsqueeze(0).expand_as(loss_per_obj)
+    N_ = (batch_f_list-utopia)/denom
+    N_ = torch.from_numpy(N_).to(logprob_list.device)
+
+    cos_penalty = cosine_similarity(N_, ray_list, dim=2)*logprob_list.squeeze(-1)
+    # A,B,_ = ray_list.shape
+    # for a in range(A):
+    #     for b in range(B):
+    #         print(ray_list[a,b,:].numpy(), norm_obj[a,b,:].numpy(), cos_penalty[a,b].detach().numpy())
+    # exit()
     cos_penalty_per_ray = cos_penalty.mean(dim=0)
     total_cos_penalty = cos_penalty_per_ray.sum()
-    return hv_loss, total_cos_penalty
+    return final_loss, total_cos_penalty
 
 def compute_spread_loss(logprobs, training_nondom_list, idx_list, f_list):
     # param_list = [param_dict["v1"].ravel().unsqueeze(0) for param_dict in param_dict_list]

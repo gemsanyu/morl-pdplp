@@ -11,7 +11,7 @@ import matplotlib.colors as mcolors
 from scipy.stats import wilcoxon
 
 from bpdplp.bpdplp_dataset import BPDPLP_Dataset
-from model.agent import Agent
+from model.agent_mo import Agent
 from model.phn import PHN
 from policy.hv import Hypervolume
 from utils import prepare_args
@@ -43,12 +43,12 @@ def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_da
         # get solutions
         agent.train()
         param_dict_list = generate_params(phn, ray_list)
-        logprob_list, batch_f_list, training_nondom_list = solve_one_batch(agent, param_dict_list, batch, training_nondom_list)
+        logprob_list, batch_f_list, _, training_nondom_list = solve_one_batch(agent, param_dict_list, batch, training_nondom_list)
         # get baseline/critic
         agent.eval()
         with torch.no_grad():
             crit_param_dict_list = generate_params(critic_phn, ray_list)
-            _, greedy_batch_f_list, training_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, training_nondom_list)
+            _, greedy_batch_f_list, _, training_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, training_nondom_list)
         idx_list = batch[0]
         hv_loss, cos_penalty_loss = compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, greedy_batch_f_list, ray_list)
         spread_loss = compute_spread_loss(logprob_list, training_nondom_list, idx_list, batch_f_list)
@@ -81,7 +81,7 @@ def validate_one_epoch(args, agent, phn, critic_phn, validation_nondom_list, cri
         critic_solution_list = []
         crit_param_dict_list = generate_params(critic_phn, ray_list)
         for _, batch in tqdm(enumerate(validation_dataloader), desc=f'Validation epoch {epoch}'):
-            _, batch_f_list, validation_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, validation_nondom_list)
+            _, batch_f_list, _, validation_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, validation_nondom_list)
             critic_solution_list += [batch_f_list]
         critic_solution_list = np.concatenate(critic_solution_list, axis=0)
         validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
@@ -89,7 +89,7 @@ def validate_one_epoch(args, agent, phn, critic_phn, validation_nondom_list, cri
     param_dict_list = generate_params(phn, ray_list)
     f_list = []
     for batch_idx, batch in tqdm(enumerate(validation_dataloader), desc=f'Validation epoch {epoch}'):
-        _, batch_f_list, validation_nondom_list = solve_one_batch(agent, param_dict_list, batch, validation_nondom_list)
+        _, batch_f_list, _, validation_nondom_list = solve_one_batch(agent, param_dict_list, batch, validation_nondom_list)
         f_list += [batch_f_list] 
     f_list = np.concatenate(f_list,axis=0)
     critic_solution_list, critic_phn = compare_with_critic(phn, critic_phn, validation_nondom_list, f_list, critic_solution_list)
@@ -136,7 +136,7 @@ def compare_with_critic(phn, critic_phn, validation_nondom_list, f_list, critic_
 def validate_with_test(agent, phn, test_batch, test_batch2, tb_writer, epoch):
     ray_list =  get_ray_list(50, agent.device)
     param_dict_list = generate_params(phn, ray_list)
-    _, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch, None)
+    _, test_f_list, _, _ = solve_one_batch(agent, param_dict_list, test_batch, None)
     gradient = np.linspace(0,1,len(param_dict_list))
     colors = np.vstack((mcolors.to_rgba(LIGHT_BLUE), mcolors.to_rgba(DARK_BLUE)))
     my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
@@ -144,7 +144,7 @@ def validate_with_test(agent, phn, test_batch, test_batch2, tb_writer, epoch):
     plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), epoch)
     
-    _, test_f_list, _ = solve_one_batch(agent, param_dict_list, test_batch2, None)
+    _, test_f_list,_, _ = solve_one_batch(agent, param_dict_list, test_batch2, None)
     plt.figure()
     plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), epoch)

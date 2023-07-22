@@ -5,7 +5,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from bpdplp.bpdplp import BPDPLP
-from model.agent import Agent
+from model.agent_mo import Agent
 from model.phn import PHN
 from utils import instance_to_batch
 

@@ -70,14 +70,14 @@ class Agent(torch.nn.Module):
         _, num_vehicles, _ = vehicle_dynamic_features.shape
         n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
-        if param_dict is not None:       
-            projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
-            node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
-            glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
-        else:
-            projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
-            node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
-            glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        # if param_dict is not None:       
+        #     projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
+        #     node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
+        #     glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        # else:
+        projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
+        node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+        glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
         glimpse_V_dynamic = glimpse_V_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
