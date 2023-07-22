@@ -220,7 +220,6 @@ def initialize(po_weight,phn:PHN,opt,tb_writer):
     return loss.cpu().item()
 
 def init_phn_output(agent, phn, tb_writer, max_step):
-    max_init_step = 1000
     po_weight = None
     for name, param in agent.named_parameters():
         if name == "project_out.weight":
@@ -228,7 +227,7 @@ def init_phn_output(agent, phn, tb_writer, max_step):
             break
     po_weight = po_weight.detach().clone()
     opt_init = torch.optim.Adam(phn.parameters(), lr=1e-4)
-    for i in range(max_init_step):
+    for i in range(max_step):
         loss = initialize(po_weight,phn,opt_init,tb_writer)
         if loss < 1e-4:
             break
@@ -238,7 +237,6 @@ def run(args):
     # validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
     
-
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, phn, opt, train_dataset, tb_writer, epoch)
 
