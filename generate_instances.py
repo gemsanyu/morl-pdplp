@@ -39,9 +39,9 @@ def generate(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx):
 
 def run():
     num_samples_per_config = 1
-    num_requests_list = [5]
-    num_vehicles_list = [3]
-    num_clusters_list = [1]
+    num_requests_list = [50]
+    num_vehicles_list = [1,2,3,5]
+    num_clusters_list = [3,4,5,6,7,8]
     cluster_delta_list = [1,1.2,1.6]
     planning_time_list = [240,480]
     time_window_length_list = [60,120]
