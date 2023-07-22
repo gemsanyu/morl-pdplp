@@ -46,7 +46,7 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
         score = travel_costs + late_penalties
         greedy_score = greedy_travel_costs + greedy_late_penalties
         advantage_list = score-greedy_score
-        advantage_list = advantage_list
+        advantage_list = (advantage_list - advantage_list.mean())/advantage_list.std()
         logprob_list = logprob_list.sum(dim=-1)
         loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
         loss = loss.mean() - 0.05*sum_entropies.mean()
