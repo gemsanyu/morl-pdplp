@@ -4,10 +4,54 @@ from typing import Optional, Dict, Tuple
 import torch
 from torch.nn import Linear
 import torch.nn.functional as F
+from torch.distributions.utils import probs_to_logits
+
+from model.graph_encoder import GraphAttentionEncoder
 
 CPU_DEVICE = torch.device("cpu")
 
-from model.graph_encoder import GraphAttentionEncoder
+
+class Categorical:
+    def __init__(self, probs_shape): 
+        # NOTE: probs_shape is supposed to be 
+        #       the shape of probs that will be 
+        #       produced by policy network
+        if len(probs_shape) < 1: 
+            raise ValueError("`probs_shape` must be at least 1.")
+        self.probs_dim = len(probs_shape) 
+        self.probs_shape = probs_shape
+        self._num_events = probs_shape[-1]
+        self._batch_shape = probs_shape[:-1] if self.probs_dim > 1 else torch.Size()
+        self._event_shape=torch.Size()
+
+    def set_probs_(self, probs):
+        self.probs = probs
+        self.logits = probs_to_logits(self.probs)
+
+    def set_probs(self, probs):
+        self.probs = probs / probs.sum(-1, keepdim=True) 
+        self.logits = probs_to_logits(self.probs)
+
+    def sample(self, sample_shape=torch.Size()):
+        if not isinstance(sample_shape, torch.Size):
+            sample_shape = torch.Size(sample_shape)
+        probs_2d = self.probs.reshape(-1, self._num_events)
+        samples_2d = torch.multinomial(probs_2d, sample_shape.numel(), True).T
+        return samples_2d.reshape(sample_shape + self._batch_shape + self._event_shape)
+
+    def log_prob(self, value):
+        value = value.long().unsqueeze(-1)
+        value, log_pmf = torch.broadcast_tensors(value, self.logits)
+        value = value[..., :1]
+        return log_pmf.gather(-1, value).squeeze(-1)
+
+    def entropy(self):
+        min_real = torch.finfo(self.logits.dtype).min
+        logits = torch.clamp(self.logits, min=min_real)
+        p_log_p = logits * self.probs
+        return -p_log_p.sum(-1)
+
+
 
 # class Agent(torch.jit.ScriptModule):
 class Agent(torch.nn.Module):
@@ -54,6 +98,8 @@ class Agent(torch.nn.Module):
         return x
     
     # @torch.jit.script_method
+    # @profile
+    # @torch.compile()
     def forward(self,
                 node_embeddings: torch.Tensor,
                 fixed_context: torch.Tensor,
@@ -105,6 +151,7 @@ class Agent(torch.nn.Module):
         return selected_vecs, selected_nodes, logprob_list, entropy_list
 
     # @torch.jit.ignore
+    # @profile
     def select(self, probs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
         ### Select next to be executed.
@@ -114,11 +161,13 @@ class Agent(torch.nn.Module):
 
         Return: index of operations, log of probabilities
         '''
-        batch_size, _ = probs.shape
+        batch_size, num_choice = probs.shape
         batch_idx = torch.arange(batch_size, device=self.device)
         
         if self.training:
-            dist = torch.distributions.Categorical(probs)
+            dist = Categorical(probs.shape)
+            dist.set_probs(probs)
+            # dist = torch.distributions.Categorical(probs)
             op = dist.sample()
             while torch.any(probs[batch_idx, op[:]]==0):
                 op = dist.sample()

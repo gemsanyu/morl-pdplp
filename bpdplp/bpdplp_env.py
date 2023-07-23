@@ -5,39 +5,53 @@ import numba as nb
 
 from bpdplp.bpdplp import TIME_HORIZONS, SPEED_PROFILES
 
+@nb.jit(nb.int64[:](nb.float64[:,:],nb.float32[:]),nopython=True,cache=True)
+def find_passed_hz(time_horizons, current_times):
+    passed_hz = np.zeros(len(current_times), dtype=np.int64)
+    _, n_hz = time_horizons.shape
+    for i in range(len(current_times)):
+        for j in range(n_hz):
+            if time_horizons[i,j] > current_times[i]:
+                passed_hz[i] = j
+                break
+    return passed_hz
+
 # @profile
-@nb.jit(nopython=True)
+# @nb.jit(nb.float32[:](nb.float32[:], nb.float32[:], nb.float64[:,:], nb.float32[:,:]),cache=True,nopython=True)
 def compute_travel_time_vectorized(distances, current_times, time_horizons, speed_profiles):
     distances = distances.copy()
     num_pair = distances.shape[0]
-    pair_idx = np.arange(num_pair, dtype=np.int64)
-    is_pass_tz = time_horizons > current_times[:, np.newaxis]
-    horizons = np.argmax(is_pass_tz, axis=1)-1
+    pair_idx = np.arange(num_pair)
+    # horizons = np.argmax(time_horizons > current_times[:, np.newaxis], axis=1)-1
+    horizons = find_passed_hz(time_horizons, current_times)-1
     temp_times = current_times.copy()
     is_distance_nonzero = distances > 0
-    n_pair, n_speed_type = speed_profiles.shape
-    _, n_tz = time_horizons.shape
-    # print(speed_profiles.shape)
-    # exit()
+    _, n_speeds = speed_profiles.shape
+    _, n_hz = time_horizons.shape
     sp = speed_profiles.ravel()
     th = time_horizons.ravel()
     while np.any(is_distance_nonzero):
-        speed = sp[horizons+pair_idx*n_speed_type]
-        arrived_time = temp_times + distances/speed
-        next_th = th[(horizons+1)+pair_idx*n_tz]
-        is_arrived_time_pass_breakpoint = arrived_time > next_th
+        # speed_profiles[pair_idx, horizons]
+        # time_horizons[pair_idx, horizons+1]
+        # print(temp_times.dtype, distances.dtype, sp.dtype)
+        # exit()
+        arrived_time = temp_times + distances/sp[horizons+pair_idx*n_speeds]
+        is_arrived_time_pass_breakpoint = arrived_time > th[(horizons+1)+pair_idx*n_hz]
         #is_nonzero_and_not_pass_breakpoint
         inanpb = np.logical_and(is_distance_nonzero, np.logical_not(is_arrived_time_pass_breakpoint))
         temp_times[inanpb] = arrived_time[inanpb]
         distances[inanpb] = 0
         #is_nonzero_and_pass_breakpoint
         inapb = np.logical_and(is_distance_nonzero, is_arrived_time_pass_breakpoint)
-        passed_th = th[(horizons[inapb]+1) + pair_idx[inapb]*n_tz]
-        speed_passed = sp[horizons[inapb] + pair_idx[inapb]*n_speed_type]
-        trav_distance =  speed_passed*(passed_th-temp_times[inapb])
-        distances[inapb] -= trav_distance
-        temp_times[inapb] = passed_th
-        horizons[inapb] = horizons[inapb] + 1
+        # speed_profiles[pair_idx[inapb], horizons[inapb]]
+        pi = pair_idx[inapb]
+        hi = horizons[inapb]
+        # speed_profiles[pi, hi]
+        # time_horizons[pi,hi+1]
+        distances[inapb] = distances[inapb] - sp[hi+pi*n_speeds] *(th[hi+1+(pi*n_hz)]-temp_times[inapb])
+        # temp_times[inapb] = time_horizons[pi,hi+1]
+        temp_times[inapb] = th[hi+1+(pi*n_hz)]
+        horizons[inapb] = hi + 1
         is_distance_nonzero = distances > 0
     travel_time = arrived_time - current_times
     return travel_time
@@ -107,15 +121,13 @@ class BPDPLP_Env(object):
         planning_time_repeated = self.planning_time[:,np.newaxis,np.newaxis]
         planning_time_repeated = np.repeat(planning_time_repeated, self.max_num_vehicles, 1)
         planning_time_repeated = np.repeat(planning_time_repeated, self.num_nodes, 2)
-        planning_time_repeated = planning_time_repeated.flatten()
+        planning_time_repeated = planning_time_repeated.ravel()
         self.time_horizons_repeated = TIME_HORIZONS*planning_time_repeated[:, np.newaxis]
+
+        #repeat-use variables
+        self.is_depot_feasible = np.asanyarray([[[False]]*self.max_num_vehicles]*self.batch_size)
+        self.vehicle_idx = np.arange(self.max_num_vehicles)[np.newaxis,:,np.newaxis]
         
-        #-------here is the variables for indexing, that are reused over and over again
-        # and not redefining them can give slight runtime efficienct
-        self.d_idx = np.repeat(np.arange(self.num_nodes)[np.newaxis,:], repeats=self.batch_size, axis=0)
-
-        #-------variables done
-
         self.reset()
         
 
@@ -159,29 +171,23 @@ class BPDPLP_Env(object):
     """
     @property
     def vehicle_dynamic_features(self):
-        # norm_current_coords = self.norm_coords[self.batch_vec_idx, self.current_location_idx.flatten(),:]
+        # norm_current_coords = self.norm_coords[self.batch_vec_idx, self.current_location_idx.ravel(),:]
         # norm_current_coords = norm_current_coords.reshape(self.batch_size, self.max_num_vehicles, 2)
         norm_current_load = (self.current_load/self.max_capacity[:, np.newaxis])[:,:, np.newaxis]
         norm_current_time = (self.current_time/self.planning_time[:, np.newaxis])[:,:, np.newaxis]
         features = np.concatenate([norm_current_load,norm_current_time], axis=-1)
         return features
     
+
     # @profile
-    # @nb.jit(nopython=True)
     def get_travel_time(self):
-        current_location_idx = self.current_location_idx.flatten()
-        idx = self.d_idx + current_location_idx[:, np.newaxis]*self.num_nodes 
-        idx += self.batch_vec_idx[:, np.newaxis]*self.num_nodes*self.num_nodes  
-        idx = idx.ravel()
-        # distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].flatten()
-        distances_list = self.distance_matrix.ravel()[idx]
-        
-        # current_time_list = self.current_time[:,:,np.newaxis]
-        current_time_list = np.repeat(self.current_time[:,:,np.newaxis],self.num_nodes,axis=2).ravel()
-        
+        current_location_idx = self.current_location_idx.ravel()
+        distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].ravel()
+        current_time_list = self.current_time[:,:,np.newaxis]
+        current_time_list = np.repeat(current_time_list,self.num_nodes,axis=2).ravel()
         time_horizon_list = self.time_horizons_repeated
-        road_types_list = self.road_types[self.batch_vec_idx, current_location_idx,:].flatten()
-        speed_profile_list = SPEED_PROFILES[road_types_list,:]
+        road_types_list = self.road_types[self.batch_vec_idx, current_location_idx,:].ravel()
+        speed_profile_list = np.take(SPEED_PROFILES,road_types_list,axis=0)
         travel_time_list = compute_travel_time_vectorized(distances_list, current_time_list, time_horizon_list, speed_profile_list)
         travel_time_list = travel_time_list.reshape((self.batch_size, self.max_num_vehicles, self.num_nodes))
         return travel_time_list
@@ -196,7 +202,9 @@ class BPDPLP_Env(object):
         norm_travel_time_list = norm_travel_time_list[:,:,:,np.newaxis]
         return norm_travel_time_list
 
+
     @property
+    # @profile
     def feasibility_mask(self):
         is_pickup_visited = self.is_node_visited[:,1:self.num_requests+1]
         is_delivery_visited = self.is_node_visited[:,self.num_requests+1:]
@@ -209,12 +217,11 @@ class BPDPLP_Env(object):
         # if pickup is visited, and is assigned to the k-th vehicle
         # and it is not visited yet
         # is_assigned_to_vec = 
-        vehicle_idx = np.arange(self.max_num_vehicles)[np.newaxis,:,np.newaxis]
-        is_assigned_to_vec = self.request_assignment[:,np.newaxis,:] == vehicle_idx
+        
+        is_assigned_to_vec = self.request_assignment[:,np.newaxis,:] == self.vehicle_idx
         is_delivery_feasible = np.logical_and(is_assigned_to_vec, is_pickup_visited[:,np.newaxis,:])
         is_delivery_feasible = np.logical_and(is_delivery_feasible, np.logical_not(is_delivery_visited[:,np.newaxis,:]))
-        is_depot_feasible = np.asanyarray([[[False]]*self.max_num_vehicles]*self.batch_size)
-        mask = np.concatenate([is_depot_feasible, is_pickup_feasible, is_delivery_feasible], axis=2)
+        mask = np.concatenate([self.is_depot_feasible, is_pickup_feasible, is_delivery_feasible], axis=2)
         # lastly mask the dummy vehicles
         mask = np.logical_and(mask, self.is_not_dummy_mask)
         return mask
@@ -240,6 +247,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
+    # @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
@@ -267,17 +275,23 @@ class BPDPLP_Env(object):
         # now filter the actions or the selected vehicles based on their current time
         # if early, then ceil,
         # if late, then add to penalty
-        f2 = np.zeros_like(f1)
+        f2 = None
         selected_vecs_current_time = self.current_time[batch_idx, selected_vecs]
         selected_nodes_tw = self.time_windows[batch_idx, selected_nodes]
         is_too_early = selected_vecs_current_time <= selected_nodes_tw[:,0]
-        if np.any(is_too_early):
-            self.current_time[batch_idx[is_too_early], selected_vecs[is_too_early]] = selected_nodes_tw[is_too_early,0]
+        # if np.any(is_too_early):
+        self.current_time[batch_idx[is_too_early], selected_vecs[is_too_early]] = selected_nodes_tw[is_too_early,0]
         is_too_late = selected_vecs_current_time > selected_nodes_tw[:,1]
-        if np.any(is_too_late):
-            late_penalty = (selected_vecs_current_time[is_too_late]-selected_nodes_tw[is_too_late,1])
+        # if np.any(is_too_late):
+        late_penalty = (selected_vecs_current_time[is_too_late]-selected_nodes_tw[is_too_late,1])
+        if len(late_penalty)>0:
             self.late_penalty[batch_idx[is_too_late], selected_vecs[is_too_late]] += late_penalty
+            # f2[is_too_late] = late_penalty
+            f2 = np.empty_like(f1)
             f2[is_too_late] = late_penalty
+            f2[np.logical_not(is_too_late)] = 0
+        if f2 is None:
+            f2 = np.zeros_like(f1)
             # exit()
         self.arrived_time[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = self.current_time[batch_idx, selected_vecs]
         self.travel_cost[batch_idx, selected_vecs] += travel_time_vecs 
@@ -302,7 +316,7 @@ class BPDPLP_Env(object):
     """
     def finish(self):
         repeated_vec_idx = np.arange(self.max_num_vehicles)[np.newaxis, :]
-        repeated_vec_idx = np.repeat(repeated_vec_idx, self.batch_size, axis=0).flatten()
+        repeated_vec_idx = np.broadcast_to(repeated_vec_idx[0,:],(self.batch_size,self.max_num_vehicles)).ravel()
         travel_time = self.get_travel_time()
         self.travel_cost[self.batch_vec_idx, repeated_vec_idx] += travel_time[self.batch_vec_idx, repeated_vec_idx, 0]
         # for i in range(self.batch_size):

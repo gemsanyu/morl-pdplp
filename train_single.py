@@ -80,8 +80,8 @@ def validate_one_epoch(agent, validation_dataset, best_validation_score, best_ag
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
         
         tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, logprob_list, sum_entropies = solve_results
-        advantage_list = (reward_list - reward_list.mean(axis=1, keepdims=True))/reward_list.std(axis=1, keepdims=True)
-        advantage_list = np.sum(advantage_list, axis=-1)
+        # advantage_list = (reward_list - reward_list.mean(axis=1, keepdims=True))/reward_list.std(axis=1, keepdims=True)
+        # advantage_list = np.sum(advantage_list, axis=-1)
         
         validation_late_penalty_list += [late_penalties]
         validation_travel_cost_list += [travel_costs]
