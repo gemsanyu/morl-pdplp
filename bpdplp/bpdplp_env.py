@@ -1,27 +1,42 @@
 import time
 
 import numpy as np
+import numba as nb
 
 from bpdplp.bpdplp import TIME_HORIZONS, SPEED_PROFILES
 
+# @profile
+@nb.jit(nopython=True)
 def compute_travel_time_vectorized(distances, current_times, time_horizons, speed_profiles):
     distances = distances.copy()
     num_pair = distances.shape[0]
-    pair_idx = np.arange(num_pair)
-    horizons = np.argmax(time_horizons > current_times[:, np.newaxis], axis=1)-1
+    pair_idx = np.arange(num_pair, dtype=np.int64)
+    is_pass_tz = time_horizons > current_times[:, np.newaxis]
+    horizons = np.argmax(is_pass_tz, axis=1)-1
     temp_times = current_times.copy()
     is_distance_nonzero = distances > 0
+    n_pair, n_speed_type = speed_profiles.shape
+    _, n_tz = time_horizons.shape
+    # print(speed_profiles.shape)
+    # exit()
+    sp = speed_profiles.ravel()
+    th = time_horizons.ravel()
     while np.any(is_distance_nonzero):
-        arrived_time = temp_times + distances/speed_profiles[pair_idx, horizons]
-        is_arrived_time_pass_breakpoint = arrived_time > time_horizons[pair_idx, horizons+1]
+        speed = sp[horizons+pair_idx*n_speed_type]
+        arrived_time = temp_times + distances/speed
+        next_th = th[(horizons+1)+pair_idx*n_tz]
+        is_arrived_time_pass_breakpoint = arrived_time > next_th
         #is_nonzero_and_not_pass_breakpoint
         inanpb = np.logical_and(is_distance_nonzero, np.logical_not(is_arrived_time_pass_breakpoint))
         temp_times[inanpb] = arrived_time[inanpb]
         distances[inanpb] = 0
         #is_nonzero_and_pass_breakpoint
         inapb = np.logical_and(is_distance_nonzero, is_arrived_time_pass_breakpoint)
-        distances[inapb] -= speed_profiles[pair_idx[inapb], horizons[inapb]]*(time_horizons[pair_idx[inapb],horizons[inapb]+1]-temp_times[inapb])
-        temp_times[inapb] = time_horizons[pair_idx[inapb],horizons[inapb]+1]
+        passed_th = th[(horizons[inapb]+1) + pair_idx[inapb]*n_tz]
+        speed_passed = sp[horizons[inapb] + pair_idx[inapb]*n_speed_type]
+        trav_distance =  speed_passed*(passed_th-temp_times[inapb])
+        distances[inapb] -= trav_distance
+        temp_times[inapb] = passed_th
         horizons[inapb] = horizons[inapb] + 1
         is_distance_nonzero = distances > 0
     travel_time = arrived_time - current_times
@@ -94,7 +109,15 @@ class BPDPLP_Env(object):
         planning_time_repeated = np.repeat(planning_time_repeated, self.num_nodes, 2)
         planning_time_repeated = planning_time_repeated.flatten()
         self.time_horizons_repeated = TIME_HORIZONS*planning_time_repeated[:, np.newaxis]
+        
+        #-------here is the variables for indexing, that are reused over and over again
+        # and not redefining them can give slight runtime efficienct
+        self.d_idx = np.repeat(np.arange(self.num_nodes)[np.newaxis,:], repeats=self.batch_size, axis=0)
+
+        #-------variables done
+
         self.reset()
+        
 
     def reset(self):
         self.current_load = np.zeros((self.batch_size, self.max_num_vehicles), dtype=np.float32)
@@ -143,53 +166,24 @@ class BPDPLP_Env(object):
         features = np.concatenate([norm_current_load,norm_current_time], axis=-1)
         return features
     
-
+    # @profile
+    # @nb.jit(nopython=True)
     def get_travel_time(self):
         current_location_idx = self.current_location_idx.flatten()
-        distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].flatten()
-        current_time_list = self.current_time[:,:,np.newaxis]
-        current_time_list = np.repeat(current_time_list,self.num_nodes,axis=2).flatten()
+        idx = self.d_idx + current_location_idx[:, np.newaxis]*self.num_nodes 
+        idx += self.batch_vec_idx[:, np.newaxis]*self.num_nodes*self.num_nodes  
+        idx = idx.ravel()
+        # distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].flatten()
+        distances_list = self.distance_matrix.ravel()[idx]
+        
+        # current_time_list = self.current_time[:,:,np.newaxis]
+        current_time_list = np.repeat(self.current_time[:,:,np.newaxis],self.num_nodes,axis=2).ravel()
+        
         time_horizon_list = self.time_horizons_repeated
         road_types_list = self.road_types[self.batch_vec_idx, current_location_idx,:].flatten()
         speed_profile_list = SPEED_PROFILES[road_types_list,:]
         travel_time_list = compute_travel_time_vectorized(distances_list, current_time_list, time_horizon_list, speed_profile_list)
         travel_time_list = travel_time_list.reshape((self.batch_size, self.max_num_vehicles, self.num_nodes))
-        # travel_time_list = [travel_time_list[self.num_vehicles_cum[i-1]*self.num_nodes:self.num_vehicles_cum[i]*self.num_nodes] for i in range(1,self.batch_size+1)]
-        # travel_time_list = [travel_time_list[i].reshape(self.num_vehicles[i], -1) for i in range(self.batch_size)]
-        
-        # print("-----------------------------")
-        # distances_listv2 = [self.distance_matrix[i, self.current_location_idx[i], :] for i in range(self.batch_size)]
-        # current_time_listv2 = [self.current_time[i] for i in range(self.batch_size)]
-        # planning_time_listv2 = [np.asanyarray([self.planning_time[i]]*self.num_vehicles[i]) for i in range(self.batch_size)]
-        # time_horizon_listv2 = [planning_time_listv2[i][:,np.newaxis]*TIME_HORIZONS for i in range(self.batch_size)]
-        # road_types_listv2 = [self.road_types[i, self.current_location_idx[i], :] for i in range(self.batch_size)]
-        # speed_profile_listv2 = [SPEED_PROFILES[road_types_listv2[i], :] for i in range(self.batch_size)]
-        # travel_time_listv2 = []
-        # print(distances_list) 
-        # print(np.concatenate(distances_listv2).flatten())
-        
-        # print("+++++++++++++++++++")
-        # z = 0
-        # for i in range(self.batch_size):
-        #     travel_time_batch = []
-        #     for k in range(self.num_vehicles[i]):
-        #         travel_time_vec = []
-        #         for j in range(self.num_nodes):
-        #             distance = distances_listv2[i][k,j]
-        #             current_time = current_time_listv2[i][k]
-        #             time_horizon = time_horizon_listv2[i][k]
-        #             speed_profile = speed_profile_listv2[i][k,j]
-        #             z+=1
-        #             travel_time = compute_travel_time(distance, current_time, time_horizon, speed_profile)
-        #             travel_time_vec += [travel_time]
-        #         travel_time_batch += [travel_time_vec]
-        #     travel_time_listv2 += [np.asanyarray(travel_time_batch)]
-        # print(travel_time_list)
-        # print(travel_time_listv2)
-        # print("-----------------------------")
-        # for i in range(self.batch_size):
-        #     #assert np.all(np.isclose(travel_time_list[i], travel_time_listv2[i]))
-        #     # print(np.isclose(travel_time_list[i], travel_time_listv2[i]))
         return travel_time_list
         
     """

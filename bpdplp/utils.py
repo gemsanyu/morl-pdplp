@@ -248,4 +248,3 @@ def generate_time_windows(num_requests, planning_time, time_windows_length, serv
     time_windows = np.concatenate([pickup_time_windows, delivery_time_windows], axis=0)
     time_windows = np.insert(time_windows, 0, [0, planning_time], axis=0)
     return time_windows
-

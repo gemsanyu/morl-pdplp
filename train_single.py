@@ -118,11 +118,9 @@ def run(args):
         best_agent.load_state_dict(best_agent_state_dict)
     validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
-    comp_agent = torch.compile(agent, mode='max-autotune')
-    comp_best_agent = torch.compile(best_agent, mode='max-autotune')
     for epoch in range(last_epoch+1, args.max_epoch):
-        train_one_epoch(args, comp_agent, comp_best_agent, opt, train_dataset, tb_writer, epoch)
-        best_validation_score, comp_best_agent = validate_one_epoch(comp_agent, validation_dataset, best_validation_score, comp_best_agent, tb_writer, epoch)
+        train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch)
+        best_validation_score, best_agent = validate_one_epoch(agent, validation_dataset, best_validation_score, best_agent, tb_writer, epoch)
         save(agent, opt, best_validation_score, best_agent.state_dict(), epoch, args.title)
 
 if __name__ == "__main__":
