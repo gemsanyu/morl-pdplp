@@ -286,7 +286,6 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]

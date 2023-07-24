@@ -102,7 +102,7 @@ def validate_one_epoch(agent, validation_dataset, best_validation_score, best_ag
     if best_validation_score is None:
         best_validation_score = validation_score_list
         best_agent = copy.deepcopy(agent)
-        return best_validation_score, best_agent
+        return True, best_validation_score, best_agent
     ret = wilcoxon(validation_score_list, best_validation_score, alternative='less')
     tb_writer.add_scalar("pvalue", ret.pvalue, epoch)
     is_improving = ret.pvalue < 0.05
@@ -133,7 +133,7 @@ def run(args):
 
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(2)
+    torch.set_num_threads(4)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
