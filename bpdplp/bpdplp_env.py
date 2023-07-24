@@ -16,7 +16,7 @@ def find_passed_hz(time_horizons, current_times):
                 break
     return passed_hz
 
-# @profile
+@profile
 # @nb.jit(nb.float32[:](nb.float32[:], nb.float32[:], nb.float64[:,:], nb.float32[:,:]),cache=True,nopython=True)
 def compute_travel_time_vectorized(distances, current_times, time_horizons, speed_profiles):
     distances = distances.copy()
@@ -35,7 +35,8 @@ def compute_travel_time_vectorized(distances, current_times, time_horizons, spee
         # time_horizons[pair_idx, horizons+1]
         # print(temp_times.dtype, distances.dtype, sp.dtype)
         # exit()
-        arrived_time = temp_times + distances/sp[horizons+pair_idx*n_speeds]
+        speed = sp[horizons+pair_idx*n_speeds]
+        arrived_time = temp_times + distances/speed
         is_arrived_time_pass_breakpoint = arrived_time > th[(horizons+1)+pair_idx*n_hz]
         #is_nonzero_and_not_pass_breakpoint
         inanpb = np.logical_and(is_distance_nonzero, np.logical_not(is_arrived_time_pass_breakpoint))
@@ -170,6 +171,7 @@ class BPDPLP_Env(object):
         current_coords, current_load, current_time
     """
     @property
+    @profile
     def vehicle_dynamic_features(self):
         # norm_current_coords = self.norm_coords[self.batch_vec_idx, self.current_location_idx.ravel(),:]
         # norm_current_coords = norm_current_coords.reshape(self.batch_size, self.max_num_vehicles, 2)
@@ -179,7 +181,7 @@ class BPDPLP_Env(object):
         return features
     
 
-    # @profile
+    @profile
     def get_travel_time(self):
         current_location_idx = self.current_location_idx.ravel()
         distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].ravel()
@@ -196,6 +198,7 @@ class BPDPLP_Env(object):
         travel_time
     """
     @property
+    @profile    
     def node_dynamic_features(self):
         travel_time_list = self.travel_time_list
         norm_travel_time_list = travel_time_list/self.planning_time[:,np.newaxis,np.newaxis]
@@ -204,7 +207,7 @@ class BPDPLP_Env(object):
 
 
     @property
-    # @profile
+    @profile
     def feasibility_mask(self):
         is_pickup_visited = self.is_node_visited[:,1:self.num_requests+1]
         is_delivery_visited = self.is_node_visited[:,self.num_requests+1:]
@@ -247,7 +250,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    # @profile
+    @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]

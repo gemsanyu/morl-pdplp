@@ -15,7 +15,6 @@ from utils import encode, solve_decode_only, update
 from utils import save, prepare_args
 from setup import setup
 
-        
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
     best_agent.eval()
@@ -129,4 +128,6 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
+    # torch._dynamo.config.verbose=True
+    # with torch.autograd.set_detect_anomaly(True):
     run(args)

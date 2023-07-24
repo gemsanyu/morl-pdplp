@@ -8,6 +8,7 @@ import torch
 from arguments import get_parser
 from bpdplp.bpdplp_env import BPDPLP_Env
 from bpdplp.bpdplp import BPDPLP
+from model.agent_so import make_heads
 
 def prepare_args():
     parser = get_parser()
@@ -47,8 +48,8 @@ def encode(agent, static_features):
     node_embeddings, graph_embeddings = agent.gae(node_init_embeddings)
     fixed_context = agent.project_fixed_context(graph_embeddings)
     glimpse_K_static, glimpse_V_static, logits_K_static = agent.project_embeddings(node_embeddings).chunk(3, dim=-1)
-    glimpse_K_static = agent._make_heads(glimpse_K_static)
-    glimpse_V_static = agent._make_heads(glimpse_V_static)
+    glimpse_K_static = make_heads(glimpse_K_static, agent.n_heads, agent.key_size)
+    glimpse_V_static = make_heads(glimpse_V_static, agent.n_heads, agent.key_size)
     return node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static
 
 
@@ -67,7 +68,7 @@ i hope it doesn't affect the agent training,
 i think it will not because we will mask the glimpse computation
 too. i guess.
 """
-# @profile
+
 def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict=None):
     batch_size, num_nodes, embed_dim = node_embeddings.shape
     batch_idx = np.arange(batch_size)

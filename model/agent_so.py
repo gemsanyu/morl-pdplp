@@ -32,6 +32,7 @@ class Categorical:
         self.probs = probs / probs.sum(-1, keepdim=True) 
         self.logits = probs_to_logits(self.probs)
 
+
     def sample(self, sample_shape=torch.Size()):
         if not isinstance(sample_shape, torch.Size):
             sample_shape = torch.Size(sample_shape)
@@ -52,6 +53,31 @@ class Categorical:
         return -p_log_p.sum(-1)
 
 
+# @profile
+# @torch.jit.script
+# @torch.compile(mode='reduce-overhead')
+def make_heads(x: torch.Tensor, n_heads: int, key_size: int)->torch.Tensor:
+    a,b,c = x.shape
+    x = x.unsqueeze(2).view(a, b, n_heads, key_size)
+    x = x.permute(2,0,1,3)
+    return x
+   
+# @torch.jit.script 
+# @torch.compile(mode='reduce-overhead')
+def get_compatibility(glimpse_Q: torch.Tensor, glimpse_K: torch.Tensor, feasibility_mask: torch.Tensor)->torch.Tensor:
+    compatibility = glimpse_Q@glimpse_K.permute(0,1,2,4,3).contiguous() / math.sqrt(glimpse_Q.size(-1)) # glimpse_K => n_heads, batch_size, num_items, embed_dim
+    compatibility = compatibility + feasibility_mask.unsqueeze(0).unsqueeze(3).float().log()
+    return compatibility
+
+# @torch.jit.script
+# @torch.compile(mode='reduce-overhead', dynamic=True)
+def get_logits(final_Q: torch.Tensor, logit_K: torch.Tensor, batch_size: int, num_vehicles: int, num_nodes: int, tanh_clip: float, feasibility_mask:torch.Tensor) -> torch.Tensor:
+    logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
+    logits = torch.tanh(logits) * tanh_clip
+    logits = logits.squeeze(2) + feasibility_mask.float().log()
+    logits = logits.view(batch_size, num_vehicles*num_nodes)
+    return logits
+    
 
 # class Agent(torch.jit.ScriptModule):
 class Agent(torch.nn.Module):
@@ -92,11 +118,9 @@ class Agent(torch.nn.Module):
         self.to(self.device)
         
     # @torch.jit.script_method
-    def _make_heads(self, x: torch.Tensor)->torch.Tensor:
-        x = x.unsqueeze(2).view(x.size(0), x.size(1), self.n_heads, self.key_size)
-        x = x.permute(2,0,1,3)
-        return x
     
+    
+    # @torch.jit.ignore
     # @torch.jit.script_method
     # @profile
     # @torch.compile()
@@ -110,7 +134,7 @@ class Agent(torch.nn.Module):
                 glimpse_K_static: torch.Tensor,
                 logit_K_static: torch.Tensor,
                 feasibility_mask: torch.Tensor,
-                param_dict=None
+                param_dict: Optional[Dict[str, torch.Tensor]]=None,
                 ):
         batch_size, num_nodes, _ = node_embeddings.shape
         _, num_vehicles, _ = vehicle_dynamic_features.shape
@@ -120,10 +144,10 @@ class Agent(torch.nn.Module):
         node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
         glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
-        glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
+        glimpse_V_dynamic = make_heads(glimpse_V_dynamic, n_heads, key_size)
         glimpse_V_dynamic = glimpse_V_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
         glimpse_K_dynamic = glimpse_K_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
-        glimpse_K_dynamic = self._make_heads(glimpse_K_dynamic)
+        glimpse_K_dynamic = make_heads(glimpse_K_dynamic, n_heads, key_size)
         glimpse_K_dynamic = glimpse_K_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
         
         glimpse_V = glimpse_V_static + glimpse_V_dynamic
@@ -132,18 +156,15 @@ class Agent(torch.nn.Module):
         query = fixed_context + projected_current_vehicle_state
         glimpse_Q = query.view(batch_size, num_vehicles, n_heads, 1, key_size)
         glimpse_Q = glimpse_Q.permute(2,0,1,3,4).contiguous()
-        compatibility = glimpse_Q@glimpse_K.permute(0,1,2,4,3).contiguous() / math.sqrt(glimpse_Q.size(-1)) # glimpse_K => n_heads, batch_size, num_items, embed_dim
-        compatibility = compatibility + feasibility_mask.unsqueeze(0).unsqueeze(3).float().log()
+        # print(glimpse_Q.shape, glimpse_K.shape)
+        compatibility = get_compatibility(glimpse_Q, glimpse_K, feasibility_mask)
         
         attention = torch.softmax(compatibility.view(n_heads,batch_size,num_vehicles*num_nodes),dim=-1).view_as(compatibility)
         heads = attention@glimpse_V
         concated_heads = heads.permute(1,2,3,0,4).contiguous()
         concated_heads = concated_heads.view(batch_size, num_vehicles, 1, self.embed_dim)
         final_Q = self.project_out(concated_heads)
-        logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
-        logits = torch.tanh(logits) * self.tanh_clip
-        logits = logits.squeeze(2) + feasibility_mask.float().log()
-        logits = logits.view(batch_size, num_vehicles*num_nodes)
+        logits = get_logits(final_Q, logit_K, batch_size, num_vehicles, num_nodes, self.tanh_clip, feasibility_mask)
         probs = torch.softmax(logits, dim=1)
         op, logprob_list, entropy_list = self.select(probs)
         selected_vecs = torch.floor(op/num_nodes).to(dtype=torch.long)

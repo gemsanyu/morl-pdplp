@@ -292,7 +292,7 @@ class Normalization(nn.Module):
         super(Normalization, self).__init__()
 
         normalizer_class = {
-            'batch': nn.BatchNorm1d,
+            # 'batch': nn.BatchNorm1d,
             'instance': nn.InstanceNorm1d
         }.get(normalization, None)
 
@@ -309,13 +309,13 @@ class Normalization(nn.Module):
 
     def forward(self, input:torch.Tensor):
         batch_size, num_nodes, embed_dim = input.shape
-        if isinstance(self.normalizer, nn.BatchNorm1d):
-            return self.normalizer(input.view(-1, input.size(-1))).view(batch_size, num_nodes, embed_dim)
-        elif isinstance(self.normalizer, nn.InstanceNorm1d):
-            return self.normalizer(input.permute(0, 2, 1)).permute(0, 2, 1)
-        else:
-            assert self.normalizer is None, "Unknown normalizer type"
-            return input
+        # if isinstance(self.normalizer, nn.BatchNorm1d):
+        #     return self.normalizer(input.view(-1, input.size(-1))).view(batch_size, num_nodes, embed_dim)
+        # elif isinstance(self.normalizer, nn.InstanceNorm1d):
+        return self.normalizer(input.permute(0, 2, 1)).permute(0, 2, 1)
+        # else:
+        #     assert self.normalizer is None, "Unknown normalizer type"
+        #     return input
 
 
 class MultiHeadAttentionLayer(nn.Sequential):
