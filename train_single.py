@@ -105,12 +105,15 @@ def validate_one_epoch(agent, validation_dataset, best_validation_score, best_ag
         return best_validation_score, best_agent
     ret = wilcoxon(validation_score_list, best_validation_score, alternative='less')
     tb_writer.add_scalar("pvalue", ret.pvalue, epoch)
-    if ret.pvalue < 0.05:
+    is_improving = ret.pvalue < 0.05
+    if is_improving:
         best_validation_score = validation_score_list
         best_agent = copy.deepcopy(agent)
-    return best_validation_score, best_agent
+    return is_improving, best_validation_score, best_agent
 
 def run(args):
+    max_patience = 30
+    not_improving = 0
     agent, opt, best_agent_state_dict, best_validation_score, tb_writer, last_epoch = setup(args)
     best_agent = copy.deepcopy(agent)
     if best_agent_state_dict is not None:
@@ -119,8 +122,14 @@ def run(args):
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch)
-        best_validation_score, best_agent = validate_one_epoch(agent, validation_dataset, best_validation_score, best_agent, tb_writer, epoch)
+        is_improving, best_validation_score, best_agent = validate_one_epoch(agent, validation_dataset, best_validation_score, best_agent, tb_writer, epoch)
         save(agent, opt, best_validation_score, best_agent.state_dict(), epoch, args.title)
+        if not is_improving:
+            not_improving += 1
+        else:
+            not_improving = 0
+        if not_improving == max_patience:
+            break
 
 if __name__ == "__main__":
     args = prepare_args()
