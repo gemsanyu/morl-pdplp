@@ -7,16 +7,26 @@ from bpdplp.bpdplp import TIME_HORIZONS, SPEED_PROFILES
 
 @nb.jit(nb.int64[:](nb.float64[:,:],nb.float32[:]),nopython=True,cache=True)
 def find_passed_hz(time_horizons, current_times):
-    passed_hz = np.zeros(len(current_times), dtype=np.int64)
+    passed_hz = np.empty(len(current_times), dtype=np.int64)
     _, n_hz = time_horizons.shape
-    for i in range(len(current_times)):
+    l_ct = len(current_times)
+    for i in range(l_ct):
         for j in range(n_hz):
             if time_horizons[i,j] > current_times[i]:
                 passed_hz[i] = j
                 break
     return passed_hz
 
-@profile
+@nb.jit(nb.float32[:](nb.float32[:],nb.int32[:],nb.int64[:],nb.int64),nopython=True,cache=True)
+def nb_indexing(arr, rows, cols, stride):
+    return arr[cols + rows*stride]
+
+@nb.jit(nb.float64[:](nb.float64[:],nb.int32[:],nb.int64[:],nb.int64),nopython=True,cache=True)
+def nb_indexing2(arr, rows, cols, stride):
+    return arr[cols + rows*stride]
+            
+
+# @profile
 # @nb.jit(nb.float32[:](nb.float32[:], nb.float32[:], nb.float64[:,:], nb.float32[:,:]),cache=True,nopython=True)
 def compute_travel_time_vectorized(distances, current_times, time_horizons, speed_profiles):
     distances = distances.copy()
@@ -35,9 +45,13 @@ def compute_travel_time_vectorized(distances, current_times, time_horizons, spee
         # time_horizons[pair_idx, horizons+1]
         # print(temp_times.dtype, distances.dtype, sp.dtype)
         # exit()
-        speed = sp[horizons+pair_idx*n_speeds]
+        # speed = sp[horizons+pair_idx*n_speeds]
+        speed = nb_indexing(sp,pair_idx,horizons,n_speeds)
         arrived_time = temp_times + distances/speed
-        is_arrived_time_pass_breakpoint = arrived_time > th[(horizons+1)+pair_idx*n_hz]
+        # next_th = th[(horizons+1)+pair_idx*n_hz]
+        next_th = nb_indexing2(th,pair_idx,horizons+1,n_hz)
+        is_arrived_time_pass_breakpoint = arrived_time > next_th
+        
         #is_nonzero_and_not_pass_breakpoint
         inanpb = np.logical_and(is_distance_nonzero, np.logical_not(is_arrived_time_pass_breakpoint))
         temp_times[inanpb] = arrived_time[inanpb]
@@ -49,31 +63,49 @@ def compute_travel_time_vectorized(distances, current_times, time_horizons, spee
         hi = horizons[inapb]
         # speed_profiles[pi, hi]
         # time_horizons[pi,hi+1]
-        distances[inapb] = distances[inapb] - sp[hi+pi*n_speeds] *(th[hi+1+(pi*n_hz)]-temp_times[inapb])
+        # inapb_speed = sp[hi+pi*n_speeds]
+        inapb_speed = nb_indexing(sp,pi,hi,n_speeds)
+        # inapb_th = th[hi+1+(pi*n_hz)]
+        inapb_th = nb_indexing2(th,pi,hi+1,n_hz)
+        distances[inapb] = distances[inapb] - inapb_speed*(inapb_th-temp_times[inapb])
         # temp_times[inapb] = time_horizons[pi,hi+1]
-        temp_times[inapb] = th[hi+1+(pi*n_hz)]
+        temp_times[inapb] = inapb_th
         horizons[inapb] = hi + 1
         is_distance_nonzero = distances > 0
+    # print(arrived_time)
     travel_time = arrived_time - current_times
     return travel_time
 
-def compute_travel_time(distance, current_time, time_horizon, speed_profile):
-    horizon = np.searchsorted(time_horizon, current_time) - 1
-    # horizon = 0
-    # while time_horizons[horizon+1]<current_time:
-    #     horizon += 1
+
+# @profile
+@nb.jit(nb.float32(nb.float32,nb.float32,nb.int64,nb.float64[:],nb.float32[:]),nopython=True,cache=True)
+def compute_travel_time(distance, current_time, horizon, time_horizon, speed_profile):
+    # horizon = np.searchsorted(time_horizon, current_time) - 1
     temp_time = current_time
-    arrived_time = temp_time 
-    while distance > 0:
-        arrived_time = temp_time + distance/speed_profile[horizon]
-        if arrived_time > time_horizon[horizon+1]:
-            distance -= speed_profile[horizon]*(time_horizon[horizon+1]-temp_time)
-            temp_time = time_horizon[horizon+1]
-            horizon+=1
+    arrived_time = temp_time
+    n_hz = len(time_horizon)
+    for h in range(horizon, n_hz): 
+    # while distance > 0:
+        arrived_time = temp_time + distance/speed_profile[h]
+        if arrived_time > time_horizon[h+1]:
+            distance -= speed_profile[h]*(time_horizon[h+1]-temp_time)
+            temp_time = time_horizon[h+1]
+            # horizon+=1
         else:
             distance=0
+            break
     travel_time = arrived_time-current_time
     return travel_time    
+
+
+@nb.jit(nb.float32[:](nb.float32[:], nb.float32[:], nb.float64[:,:], nb.float32[:,:]),cache=True,nopython=True)
+def compute_travel_time_loop(distances, current_times, time_horizons, speed_profiles):
+    travel_times = np.empty_like(current_times)
+    horizons = find_passed_hz(time_horizons, current_times)-1
+    # print(horizons)
+    for i in range(len(current_times)):
+        travel_times[i] = compute_travel_time(distances[i], current_times[i], horizons[i], time_horizons[i,:], speed_profiles[i,:])
+    return travel_times
 
 """
     we need to add dummy vehicles,
@@ -171,7 +203,7 @@ class BPDPLP_Env(object):
         current_coords, current_load, current_time
     """
     @property
-    @profile
+    # @profile
     def vehicle_dynamic_features(self):
         # norm_current_coords = self.norm_coords[self.batch_vec_idx, self.current_location_idx.ravel(),:]
         # norm_current_coords = norm_current_coords.reshape(self.batch_size, self.max_num_vehicles, 2)
@@ -181,7 +213,7 @@ class BPDPLP_Env(object):
         return features
     
 
-    @profile
+    # @profile
     def get_travel_time(self):
         current_location_idx = self.current_location_idx.ravel()
         distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].ravel()
@@ -190,7 +222,10 @@ class BPDPLP_Env(object):
         time_horizon_list = self.time_horizons_repeated
         road_types_list = self.road_types[self.batch_vec_idx, current_location_idx,:].ravel()
         speed_profile_list = np.take(SPEED_PROFILES,road_types_list,axis=0)
-        travel_time_list = compute_travel_time_vectorized(distances_list, current_time_list, time_horizon_list, speed_profile_list)
+        # travel_time_list = compute_travel_time_vectorized(distances_list, current_time_list, time_horizon_list, speed_profile_list)
+        travel_time_list = compute_travel_time_loop(distances_list.copy(), current_time_list.copy(), time_horizon_list, speed_profile_list)
+        # print(travel_time_list-travel_time_listv2)
+        # assert np.allclose(travel_time_list,travel_time_listv2)
         travel_time_list = travel_time_list.reshape((self.batch_size, self.max_num_vehicles, self.num_nodes))
         return travel_time_list
         
@@ -198,7 +233,7 @@ class BPDPLP_Env(object):
         travel_time
     """
     @property
-    @profile    
+    # @profile    
     def node_dynamic_features(self):
         travel_time_list = self.travel_time_list
         norm_travel_time_list = travel_time_list/self.planning_time[:,np.newaxis,np.newaxis]
@@ -207,7 +242,7 @@ class BPDPLP_Env(object):
 
 
     @property
-    @profile
+    # @profile
     def feasibility_mask(self):
         is_pickup_visited = self.is_node_visited[:,1:self.num_requests+1]
         is_delivery_visited = self.is_node_visited[:,self.num_requests+1:]
@@ -250,7 +285,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    @profile
+    # @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
