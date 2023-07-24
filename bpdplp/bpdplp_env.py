@@ -17,17 +17,17 @@ def find_passed_hz(time_horizons, current_times):
                 break
     return passed_hz
 
-@nb.jit(nb.float32[:](nb.float32[:],nb.int32[:],nb.int64[:],nb.int64),nopython=True,cache=True)
+@nb.jit(nb.float32[:](nb.float32[:],nb.int64[:],nb.int64[:],nb.int64),nopython=True,cache=True)
 def nb_indexing(arr, rows, cols, stride):
     return arr[cols + rows*stride]
 
-@nb.jit(nb.float64[:](nb.float64[:],nb.int32[:],nb.int64[:],nb.int64),nopython=True,cache=True)
+@nb.jit(nb.float64[:](nb.float64[:],nb.int64[:],nb.int64[:],nb.int64),nopython=True,cache=True)
 def nb_indexing2(arr, rows, cols, stride):
     return arr[cols + rows*stride]
             
 
 # @profile
-# @nb.jit(nb.float32[:](nb.float32[:], nb.float32[:], nb.float64[:,:], nb.float32[:,:]),cache=True,nopython=True)
+@nb.jit(nb.float32[:](nb.float32[:], nb.float32[:], nb.float64[:,:], nb.float32[:,:]),cache=True,nopython=True)
 def compute_travel_time_vectorized(distances, current_times, time_horizons, speed_profiles):
     distances = distances.copy()
     num_pair = distances.shape[0]
@@ -46,6 +46,8 @@ def compute_travel_time_vectorized(distances, current_times, time_horizons, spee
         # print(temp_times.dtype, distances.dtype, sp.dtype)
         # exit()
         # speed = sp[horizons+pair_idx*n_speeds]
+        # print(sp.dtype,pair_idx.dtype,horizons.dtype,type(n_speeds))
+        # exit()
         speed = nb_indexing(sp,pair_idx,horizons,n_speeds)
         arrived_time = temp_times + distances/speed
         # next_th = th[(horizons+1)+pair_idx*n_hz]
@@ -102,7 +104,6 @@ def compute_travel_time(distance, current_time, horizon, time_horizon, speed_pro
 def compute_travel_time_loop(distances, current_times, time_horizons, speed_profiles):
     travel_times = np.empty_like(current_times)
     horizons = find_passed_hz(time_horizons, current_times)-1
-    # print(horizons)
     for i in range(len(current_times)):
         travel_times[i] = compute_travel_time(distances[i], current_times[i], horizons[i], time_horizons[i,:], speed_profiles[i,:])
     return travel_times
@@ -285,7 +286,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    # @profile
+    @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
