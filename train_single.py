@@ -18,7 +18,7 @@ from setup import setup
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
     best_agent.eval()
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
     sum_advantage = 0
     sum_training_travel_costs = 0
     sum_training_penalties = 0
@@ -65,7 +65,7 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
 @torch.no_grad()
 def validate_one_epoch(agent, validation_dataset, best_validation_score, best_agent, tb_writer, epoch):
     agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=2, pin_memory=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=4, pin_memory=True)
     validation_late_penalty_list = []
     validation_travel_cost_list = []
 
@@ -133,7 +133,7 @@ def run(args):
 
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(4)
+    torch.set_num_threads(8)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
