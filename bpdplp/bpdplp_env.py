@@ -235,7 +235,7 @@ class BPDPLP_Env(object):
         features = np.concatenate([norm_current_load,norm_current_time], axis=-1)
         return features
     
-    # @profile
+    @profile
     def get_travel_time(self):
         current_location_idx = self.current_location_idx.ravel()
         distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].ravel()
@@ -311,7 +311,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    # @profile
+    @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         assert (len(batch_idx) == self.batch_size)
         travel_time_list = self.travel_time_list
