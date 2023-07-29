@@ -235,7 +235,7 @@ class BPDPLP_Env(object):
         features = np.concatenate([norm_current_load,norm_current_time], axis=-1)
         return features
     
-    @profile
+    # @profile
     def get_travel_time(self):
         current_location_idx = self.current_location_idx.ravel()
         distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].ravel()
@@ -250,7 +250,7 @@ class BPDPLP_Env(object):
         # passed_hz_compact =  np.repeat(passed_hz_compact[:,:,np.newaxis],self.num_nodes,axis=2).ravel()
         # print(passed_hz, passed_hz_compact)
         # assert np.allclose(passed_hz, passed_hz_compact)
-        travel_time_list = compute_travel_time_loop(distances_list, current_time_list, time_horizon_list.astype(np.float32), speed_profile_list)
+        travel_time_list = compute_travel_time_loop(distances_list.copy(), current_time_list.copy(), time_horizon_list.astype(np.float32), speed_profile_list)
         # travel_time_list = compute_travel_time_vectorizedv2(distances_list, current_time_list, time_horizon_list, speed_profile_list)
         travel_time_list = travel_time_list.reshape((self.batch_size, self.max_num_vehicles, self.num_nodes))
         return travel_time_list
@@ -311,7 +311,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    @profile
+    # @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         assert (len(batch_idx) == self.batch_size)
         travel_time_list = self.travel_time_list
