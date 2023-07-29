@@ -2,6 +2,7 @@ import copy
 import random
 
 import numpy as np
+import numba
 from scipy.stats import wilcoxon
 import torch
 from torch.utils.data import DataLoader
@@ -133,10 +134,12 @@ def run(args):
 
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(2)
+    torch.set_num_threads(4)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
+    numba.set_num_threads(4)
+    # numba.config.THREADING_LAYER = 'tbb'
     # torch._dynamo.config.verbose=True
     # with torch.autograd.set_detect_anomaly(True):
     run(args)
