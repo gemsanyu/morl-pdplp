@@ -4,10 +4,53 @@ from typing import Optional, Dict, List, Tuple
 import torch
 from torch.nn import Linear
 import torch.nn.functional as F
+from torch.distributions.utils import probs_to_logits
+
+from model.graph_encoder import GraphAttentionEncoder
 
 CPU_DEVICE = torch.device("cpu")
 
-from model.graph_encoder import GraphAttentionEncoder
+
+class Categorical:
+    def __init__(self, probs_shape): 
+        # NOTE: probs_shape is supposed to be 
+        #       the shape of probs that will be 
+        #       produced by policy network
+        if len(probs_shape) < 1: 
+            raise ValueError("`probs_shape` must be at least 1.")
+        self.probs_dim = len(probs_shape) 
+        self.probs_shape = probs_shape
+        self._num_events = probs_shape[-1]
+        self._batch_shape = probs_shape[:-1] if self.probs_dim > 1 else torch.Size()
+        self._event_shape=torch.Size()
+
+    def set_probs_(self, probs):
+        self.probs = probs
+        self.logits = probs_to_logits(self.probs)
+
+    def set_probs(self, probs):
+        self.probs = probs / probs.sum(-1, keepdim=True) 
+        self.logits = probs_to_logits(self.probs)
+
+
+    def sample(self, sample_shape=torch.Size()):
+        if not isinstance(sample_shape, torch.Size):
+            sample_shape = torch.Size(sample_shape)
+        probs_2d = self.probs.reshape(-1, self._num_events)
+        samples_2d = torch.multinomial(probs_2d, sample_shape.numel(), True).T
+        return samples_2d.reshape(sample_shape + self._batch_shape + self._event_shape)
+
+    def log_prob(self, value):
+        value = value.long().unsqueeze(-1)
+        value, log_pmf = torch.broadcast_tensors(value, self.logits)
+        value = value[..., :1]
+        return log_pmf.gather(-1, value).squeeze(-1)
+
+    def entropy(self):
+        min_real = torch.finfo(self.logits.dtype).min
+        logits = torch.clamp(self.logits, min=min_real)
+        p_log_p = logits * self.probs
+        return -p_log_p.sum(-1)
 
 # class Agent(torch.jit.ScriptModule):
 class Agent(torch.nn.Module):
@@ -70,13 +113,13 @@ class Agent(torch.nn.Module):
         _, num_vehicles, _ = vehicle_dynamic_features.shape
         n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
-        # if param_dict is not None:       
-        #     projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
-        #     node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
-        #     glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
-        # else:
-        projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
-        node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+        if param_dict is not None:       
+            projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
+            node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
+            # glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        else:
+            projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
+            node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
         glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
@@ -129,9 +172,16 @@ class Agent(torch.nn.Module):
 
         Return: index of operations, log of probabilities
         '''
+        batch_size, num_choice = probs.shape
+        batch_idx = torch.arange(batch_size, device=self.device)
+        
         if self.training:
-            dist = torch.distributions.Categorical(probs)
+            dist = Categorical(probs.shape)
+            dist.set_probs(probs)
+            # dist = torch.distributions.Categorical(probs)
             op = dist.sample()
+            while torch.any(probs[batch_idx, op[:]]==0):
+                op = dist.sample()
             logprob = dist.log_prob(op)
             entropy = dist.entropy()
         else:

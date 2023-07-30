@@ -292,7 +292,7 @@ class Normalization(nn.Module):
         super(Normalization, self).__init__()
 
         normalizer_class = {
-            'batch': nn.BatchNorm1d,
+            # 'batch': nn.BatchNorm1d,
             'instance': nn.InstanceNorm1d
         }.get(normalization, None)
 
@@ -325,7 +325,7 @@ class MultiHeadAttentionLayer(nn.Sequential):
             n_heads,
             embed_dim,
             feed_forward_hidden=512,
-            normalization='batch',
+            normalization='instance',
     ):
         super(MultiHeadAttentionLayer, self).__init__(
             SkipConnection(
@@ -354,7 +354,7 @@ class GraphAttentionEncoder(nn.Module):
             embed_dim,
             n_layers,
             node_dim=None,
-            normalization='batch',
+            normalization='instance',
             feed_forward_hidden=512
     ):
         super(GraphAttentionEncoder, self).__init__()
