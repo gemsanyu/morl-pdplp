@@ -141,6 +141,11 @@ def update(agent, opt, loss, max_grad_norm):
         torch.nn.utils.clip_grad_norm_(agent.parameters(), max_norm=max_grad_norm)
         opt.step()
         opt.zero_grad(set_to_none=True)
+
+def update_step_only(agent, opt, max_grad_norm):
+    torch.nn.utils.clip_grad_norm_(agent.parameters(), max_norm=max_grad_norm)
+    opt.step()
+    opt.zero_grad(set_to_none=True)
         
 
 def save(agent, opt, best_validation_score, best_agent_state_dict, epoch, title):

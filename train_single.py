@@ -12,14 +12,16 @@ from tqdm import tqdm
 from arguments import get_parser
 from bpdplp.bpdplp_env import BPDPLP_Env
 from bpdplp.bpdplp_dataset import BPDPLP_Dataset
-from utils import encode, solve_decode_only, update
+from utils import encode, solve_decode_only, update_step_only
 from utils import save, prepare_args
 from setup import setup
 
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
     best_agent.eval()
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
+    actual_batch_size = 128
+    propagated_batch_size = 0
+    train_dataloader = DataLoader(train_dataset, batch_size=actual_batch_size, shuffle=True, num_workers=2, pin_memory=True)
     sum_advantage = 0
     sum_training_travel_costs = 0
     sum_training_penalties = 0
@@ -50,7 +52,11 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
         logprob_list = logprob_list.sum(dim=-1)
         loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
         loss = loss.mean() - 0.05*sum_entropies.mean()
-        update(agent, opt, loss, args.max_grad_norm)
+        loss.backward()
+        propagated_batch_size += actual_batch_size
+        if propagated_batch_size == args.batch_size:
+            propagated_batch_size = 0
+            update_step_only(agent, opt, args.max_grad_norm)
         
         sum_advantage += advantage_list.sum()
         sum_training_travel_costs += travel_costs.sum()
