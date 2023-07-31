@@ -1,4 +1,5 @@
 import folium
+from folium.plugins import BeautifyIcon
 import numpy as np
 
 if __name__ == "__main__":
@@ -13,9 +14,11 @@ if __name__ == "__main__":
             strings = lines[i].split()
             idx = i-1
             coords[idx, 0], coords[idx,1] = float(strings[1]), float(strings[2])
-    print(num_nodes)
-    print(coords)
-    m = folium.Map(location=coords[0], zoom_start=12, tiles="Stamen Terrain")
-    for i in range(num_nodes):
+    max_coords = np.max(coords, axis=0, keepdims=True)
+    min_coords = np.min(coords, axis=0, keepdims=True)
+    central_coords = (max_coords+min_coords)/2
+    print(central_coords)
+    m = folium.Map(location=central_coords, zoom_start=12, tiles="Stamen Terrain")
+    for i in range(500):
         folium.Marker(coords[i]).add_to(m)
     m.save(graph_filename+".html")
