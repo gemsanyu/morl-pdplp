@@ -279,7 +279,8 @@ class BPDPLP_Env(object):
         if self.num_visited_nodes[0,0] == 2*self.num_requests: #add travel time to depots
             repeated_vec_idx = np.arange(self.max_num_vehicles)[np.newaxis, :]
             repeated_vec_idx = np.broadcast_to(repeated_vec_idx[0,:],(self.batch_size,self.max_num_vehicles)).ravel()
-            f1 = f1 + self.travel_time_list[self.batch_vec_idx, repeated_vec_idx, 0]
+            travel_time_to_depot = + self.travel_time_list[self.batch_vec_idx, repeated_vec_idx, 0].reshape(self.batch_size,self.max_num_vehicles)
+            f1 = f1 + travel_time_to_depot.sum(axis=1)
         return np.concatenate([f1[:, np.newaxis], f2[:, np.newaxis]], axis=-1)
 
     def get_state(self):

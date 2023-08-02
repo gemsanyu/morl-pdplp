@@ -25,30 +25,31 @@ def get_hv_d(batch_f_list):
     hv_d_list = torch.cat(hv_d_list, dim=0)
     return hv_d_list
 
-def compute_loss(logprobs, training_nondom_list, idx_list, reward_list, ray):
+def compute_loss(logprobs, reward_list, ray):
     device = logprobs.device
-    nadir = []
-    utopia = []
-    for i in range(len(reward_list)):
-        nondom_sols =  training_nondom_list[idx_list[i]]
-        nadir += [np.max(nondom_sols, axis=0, keepdims=True)]
-        utopia += [np.min(nondom_sols, axis=0, keepdims=True)]
-    nadir = np.concatenate(nadir, axis=0)[:,np.newaxis,:]
-    utopia = np.concatenate(utopia, axis=0)[:,np.newaxis,:]
+    # nadir = []
+    # utopia = []
+    # for i in range(len(reward_list)):
+    #     nondom_sols =  training_nondom_list[idx_list[i]]
+    #     nadir += [np.max(nondom_sols, axis=0, keepdims=True)]
+    #     utopia += [np.min(nondom_sols, axis=0, keepdims=True)]
+    # nadir = np.concatenate(nadir, axis=0)[:,np.newaxis,:]
+    # utopia = np.concatenate(utopia, axis=0)[:,np.newaxis,:]
     
-    denom = nadir-utopia
-    denom[denom==0]=1
-    reward_list *= -1
-    reward_list = (reward_list-utopia)/denom
+    # denom = nadir-utopia
+    # denom[denom==0]=1
+    # reward_list *= -1
+    # reward_list = (reward_list-utopia)/denom
+    # reward_list *= -1
+    reward_list /= reward_list.sum(axis=1, keepdims=True)
     reward_list = torch.from_numpy(reward_list).to(device)
-    reward_list *= -1
     ray = ray[None, None, :]
     # print(reward_list)
     tch_reward = ray*(reward_list)
     tch_reward, _ = tch_reward.max(dim=-1)
     tch_advantage = tch_reward - tch_reward.mean(dim=1, keepdim=True)
     loss = tch_advantage*logprobs
-    loss = -loss.mean()
+    loss = loss.mean()
     return loss
 
 def update(agent, opt, loss):
@@ -84,7 +85,7 @@ def get_ray(device):
     ray = torch.from_numpy(ray).to(device)
     return ray
 
-def solve_one_batch(agent, batch, nondom_list):
+def solve_one_batch(agent, batch, nondom_list=None):
     idx_list = batch[0]
     batch = batch[1:]
     num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
@@ -114,7 +115,7 @@ def solve_one_batch(agent, batch, nondom_list):
 
     return logprob_list, f_list, reward_list, nondom_list
 
-def save(title, epoch, agent, critic, opt, training_nondom_list, validation_nondom_list, critic_solution_list):
+def save(title, epoch, agent, critic, opt, validation_nondom_list, critic_solution_list):
     checkpoint_root = "checkpoints"
     checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -123,7 +124,7 @@ def save(title, epoch, agent, critic, opt, training_nondom_list, validation_nond
         "agent_state_dict": agent.state_dict(),
         "critic_state_dict": critic.state_dict(),
         "opt_state_dict":opt.state_dict(),
-        "training_nondom_list":training_nondom_list,
+        # "training_nondom_list":training_nondom_list,
         "validation_nondom_list":validation_nondom_list,
         "critic_solution_list":critic_solution_list,
         "epoch":epoch,

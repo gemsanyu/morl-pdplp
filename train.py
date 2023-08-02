@@ -21,20 +21,20 @@ from setup import setup
 LIGHT_BLUE = mcolors.CSS4_COLORS['lightblue']
 DARK_BLUE = mcolors.CSS4_COLORS['darkblue']
 
-def train_one_epoch(args, agent: Agent, opt, train_dataset, training_nondom_list, tb_writer, epoch):
+def train_one_epoch(args, agent: Agent, opt, train_dataset, tb_writer, epoch):
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
     sum_loss = 0
     agent.train()
     for _, batch in tqdm(enumerate(train_dataloader), desc=f'Training epoch {epoch}'):
         ray = get_ray(agent.device)
         agent.get_param_dict(ray)
-        logprobs, f_list, reward_list, training_nondom_list = solve_one_batch(agent, batch, training_nondom_list)
+        logprobs, f_list, reward_list, _ = solve_one_batch(agent, batch)
         idx_list = batch[0]
-        loss = compute_loss(logprobs, training_nondom_list, idx_list, reward_list, ray)
+        loss = compute_loss(logprobs, reward_list, ray)
         sum_loss += loss.cpu().item()
         update(agent, opt, loss)
     tb_writer.add_scalar("Training Loss", sum_loss/(len(train_dataset)/args.batch_size), epoch)
-    return training_nondom_list  
+      
 
 
 @torch.no_grad()
@@ -154,13 +154,13 @@ def run(args):
     validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
     # population training nondom list if still None or first epoch
-    if training_nondom_list is None:
-        training_nondom_list = populate_nondom_list(agent, train_dataset, args.batch_size)
+    # if training_nondom_list is None:
+    #     training_nondom_list = populate_nondom_list(agent, train_dataset, args.batch_size)
     
     for epoch in range(last_epoch+1, args.max_epoch):
-        training_nondom_list = train_one_epoch(args, agent, opt, train_dataset, training_nondom_list, tb_writer, epoch)
+        train_one_epoch(args, agent, opt, train_dataset, tb_writer, epoch)
         validation_nondom_list, critic_solution_list, critic = validate_one_epoch(args, agent, critic, validation_nondom_list, critic_solution_list, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
-        save(args.title, epoch, agent, critic, opt, training_nondom_list, validation_nondom_list, critic_solution_list)
+        save(args.title, epoch, agent, critic, opt, validation_nondom_list, critic_solution_list)
 
 if __name__ == "__main__":
     matplotlib.use('Agg')
