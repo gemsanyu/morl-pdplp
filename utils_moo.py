@@ -6,7 +6,6 @@ import torch
 import random
 
 from torch.utils.data import DataLoader
-from torch.nn.functional import cosine_similarity
 from tqdm import tqdm
 
 from policy.policy import Policy
@@ -38,45 +37,29 @@ def compute_loss(logprobs, training_nondom_list, idx_list, reward_list, ray):
     utopia = np.concatenate(utopia, axis=0)[:,np.newaxis,:]
     
     denom = nadir-utopia
-    denom[denom==0]=1e-8
-    norm_reward = (reward_list-utopia)/denom
-    norm_reward = torch.from_numpy(norm_reward).to(device)
+    denom[denom==0]=1
+    reward_list *= -1
+    reward_list = (reward_list-utopia)/denom
+    reward_list = torch.from_numpy(reward_list).to(device)
+    reward_list *= -1
     ray = ray[None, None, :]
-    tch_reward = ray*(norm_reward)
+    # print(reward_list)
+    tch_reward = ray*(reward_list)
     tch_reward, _ = tch_reward.max(dim=-1)
     tch_advantage = tch_reward - tch_reward.mean(dim=1, keepdim=True)
     loss = tch_advantage*logprobs
-    loss = loss.mean()
+    loss = -loss.mean()
     return loss
 
-def compute_spread_loss(logprobs, training_nondom_list, idx_list, f_list):
-    # param_list = [param_dict["v1"].ravel().unsqueeze(0) for param_dict in param_dict_list]
-    # param_list = torch.cat(param_list).unsqueeze(0)
-    nadir = []
-    utopia = []
-    for i in range(len(f_list)):
-        nondom_sols =  training_nondom_list[idx_list[i]]
-        nadir += [np.max(nondom_sols, axis=0, keepdims=True)[np.newaxis,:]]
-        utopia += [np.min(nondom_sols, axis=0, keepdims=True)[np.newaxis,:]]
-    nadir = np.concatenate(nadir, axis=0)
-    utopia = np.concatenate(utopia, axis=0)
-    f_list = torch.from_numpy(f_list)
-    denom = (nadir-utopia)
-    denom[denom==0] = 1e-8
-    f_list = (f_list-utopia)/denom
-    distance_matrix = torch.cdist(f_list, f_list)
-    _, batched_min_distance_per_ray = distance_matrix.min(dim=2)
-    # batched_min_distance_per_ray = torch.transpose(batched_min_distance_per_ray,0,1)
-    batched_min_distance_per_ray = batched_min_distance_per_ray.to(logprobs.device)
-    spread_loss = (logprobs*batched_min_distance_per_ray).mean()
-    return spread_loss
-
-def update_phn(agent, phn, opt, final_loss):
-    final_loss.backward()
-    torch.nn.utils.clip_grad_norm_(phn.parameters(), max_norm=0.5)
+def update(agent, opt, loss):
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(agent.parameters(), max_norm=0.5)
     opt.step()
-    agent.zero_grad(set_to_none=True)
-    phn.zero_grad(set_to_none=True)
+    opt.zero_grad(set_to_none=True)
+
+def update_step_only(agent, opt):
+    torch.nn.utils.clip_grad_norm_(agent.parameters(), max_norm=0.5)
+    opt.step()
     opt.zero_grad(set_to_none=True)
 
 def get_ray_list(num_ray, device, is_random=True):
@@ -101,24 +84,17 @@ def get_ray(device):
     ray = torch.from_numpy(ray).to(device)
     return ray
 
-def generate_params(phn, ray_list):
-    param_dict_list = []
-    for ray in ray_list:
-        param_dict = phn(ray)
-        param_dict_list += [param_dict]
-    return param_dict_list
-
-def solve_one_batch(agent, param_dict, batch, nondom_list):
+def solve_one_batch(agent, batch, nondom_list):
     idx_list = batch[0]
     batch = batch[1:]
     num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
     env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
     static_features,_,_,_ = env.begin()
     static_features = torch.from_numpy(static_features).to(agent.device)
-    encode_results = encode(agent, static_features, param_dict)
+    encode_results = encode(agent, static_features)
     node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
 
-    solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
+    solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
     tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, logprob_list, sum_entropies = solve_results
     f_list = np.concatenate([travel_costs[:,np.newaxis], late_penalties[:,np.newaxis]], axis=1)
 
@@ -138,7 +114,7 @@ def solve_one_batch(agent, param_dict, batch, nondom_list):
 
     return logprob_list, f_list, reward_list, nondom_list
 
-def save_phn(title, epoch, agent, critic, phn, critic_phn, opt, training_nondom_list, validation_nondom_list, critic_solution_list):
+def save(title, epoch, agent, critic, opt, training_nondom_list, validation_nondom_list, critic_solution_list):
     checkpoint_root = "checkpoints"
     checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -146,8 +122,6 @@ def save_phn(title, epoch, agent, critic, phn, critic_phn, opt, training_nondom_
     checkpoint = {
         "agent_state_dict": agent.state_dict(),
         "critic_state_dict": critic.state_dict(),
-        "phn_state_dict":phn.state_dict(),
-        "critic_phn_state_dict":critic_phn.state_dict(),
         "opt_state_dict":opt.state_dict(),
         "training_nondom_list":training_nondom_list,
         "validation_nondom_list":validation_nondom_list,

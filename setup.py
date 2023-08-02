@@ -6,7 +6,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from bpdplp.bpdplp import BPDPLP
 from model.agent import Agent
-from model.phn import PHN
 from utils import instance_to_batch
 
 CPU_DEVICE = torch.device("cpu")
@@ -19,6 +18,7 @@ def get_agent(args) -> Agent:
     agent = Agent(num_node_static_features=NUM_NODE_STATIC_FEATURES,
                   num_vehicle_dynamic_features=NUM_VEHICLE_DYNAMIC_FEATURES,
                   num_node_dynamic_features=NUM_NODE_DYNAMIC_FEATURES,
+                  ray_hidden_size=args.ray_hidden_size,
                   n_heads=args.n_heads,
                   n_gae_layers=args.n_gae_layers,
                   embed_dim=args.embed_dim,
@@ -36,11 +36,7 @@ def get_tb_writer(args, validation=True)->SummaryWriter:
     tb_writer = SummaryWriter(log_dir=model_summary_dir.absolute())
     return tb_writer
 
-def get_phn(args, num_neurons) -> PHN :
-    phn = PHN(args.ray_hidden_size, num_neurons, args.device)
-    return phn
-
-def setup_phn(args, load_best=False, validation=False):
+def setup(args, load_best=False, validation=False):
     tb_writer = get_tb_writer(args, validation)    
 
     checkpoint_root = "checkpoints"
@@ -59,20 +55,16 @@ def setup_phn(args, load_best=False, validation=False):
     else:
         print("CHECKPOINT NOT FOUND! new run?")
 
-    phn = get_phn(args, args.embed_dim)
-    critic_phn = get_phn(args, args.embed_dim)
     training_nondom_list = None
     validation_nondom_list = None
     critic_solution_list = None
-    params = list(phn.parameters()) + list(agent.gae.parameters())
-    opt = torch.optim.Adam(params, args.lr, weight_decay=1e-6)
+
+    opt = torch.optim.Adam(agent.parameters(), args.lr, weight_decay=1e-6)
     last_epoch = 0
 
     if checkpoint is not None:
         agent.load_state_dict(checkpoint["agent_state_dict"])
         critic.load_state_dict(checkpoint["critic_state_dict"])
-        phn.load_state_dict(checkpoint["phn_state_dict"])
-        critic_phn.load_state_dict(checkpoint["critic_phn_state_dict"])
         critic_solution_list = checkpoint["critic_nondom_list"]
         training_nondom_list = checkpoint["training_nondom_list"]
         validation_nondom_list = checkpoint["validation_nondom_list"]
@@ -82,4 +74,4 @@ def setup_phn(args, load_best=False, validation=False):
     test_batch = instance_to_batch(test_instance)
     test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
     test_batch2 = instance_to_batch(test_instance2)
-    return agent, critic, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch
+    return agent, critic, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch

@@ -49,20 +49,7 @@ def get_parser():
                         type=int,
                         default=128,
                         help="phn ray hidden size")
-    parser.add_argument('--num-ray',
-                        type=int,
-                        default=8,
-                        help="num of rays")
-    parser.add_argument('--omega',
-                        type=int,
-                        default=10,
-                        help="max patience")
     
-    parser.add_argument('--ld',
-                        type=float,
-                        default=4,
-                        help="ld cosine sim penalty")
-
     # agent base or AM
     parser.add_argument('--lr',
                         type=float,
