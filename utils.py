@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 import torch
+from torch.nn import functional as F
 
 from arguments import get_parser
 from bpdplp.bpdplp_env import BPDPLP_Env
@@ -36,7 +37,7 @@ def instance_to_batch(instance:BPDPLP)->BPDPLP_Env:
     return 0, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
     
 
-def encode(agent, static_features):
+def encode(agent, static_features, param_dict=None):
     num_requests = int((static_features.shape[1]-1)//2)
     depot_static_features = static_features[:, 0].unsqueeze(1)
     delivery_static_features = static_features[:,num_requests+1:]
@@ -46,8 +47,15 @@ def encode(agent, static_features):
     delivery_init_embedding = agent.delivery_embedder(delivery_static_features)
     node_init_embeddings = torch.concat([depot_init_embedding, pickup_init_embedding, delivery_init_embedding], dim=1)
     node_embeddings, graph_embeddings = agent.gae(node_init_embeddings)
-    fixed_context = agent.project_fixed_context(graph_embeddings)
-    glimpse_K_static, glimpse_V_static, logits_K_static = agent.project_embeddings(node_embeddings).chunk(3, dim=-1)
+    if param_dict is not None:
+        fixed_context = F.linear(graph_embeddings, param_dict["pf_weight"])
+    else:
+        fixed_context = agent.project_fixed_context(graph_embeddings)
+    if param_dict is not None:
+        projected_embeddings = F.linear(node_embeddings, param_dict["pe_weight"])
+    else:
+        projected_embeddings = agent.project_embeddings(node_embeddings)
+    glimpse_K_static, glimpse_V_static, logits_K_static = projected_embeddings.chunk(3, dim=-1)
     glimpse_K_static = make_heads(glimpse_K_static, agent.n_heads, agent.key_size)
     glimpse_V_static = make_heads(glimpse_V_static, agent.n_heads, agent.key_size)
     return node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static
@@ -80,9 +88,9 @@ def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, gli
     feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
     num_vehicles = env.num_vehicles
     max_num_vehicles = int(np.max(num_vehicles))
-    num_vehicles_cum = np.concatenate([np.asanyarray([0]),np.cumsum(num_vehicles)])
-    vehicle_batch_idx = np.concatenate([ np.asanyarray([i]*num_vehicles[i]) for i in range(batch_size)])
-    vehicle_idx = np.concatenate([np.arange(num_vehicles[i]) for i in range(batch_size)])
+    # num_vehicles_cum = np.concatenate([np.asanyarray([0]),np.cumsum(num_vehicles)])
+    # vehicle_batch_idx = np.concatenate([ np.asanyarray([i]*num_vehicles[i]) for i in range(batch_size)])
+    # vehicle_idx = np.concatenate([np.arange(num_vehicles[i]) for i in range(batch_size)])
     # expanding glimpses
     glimpse_V_static = glimpse_V_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
     glimpse_K_static = glimpse_K_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)

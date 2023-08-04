@@ -155,9 +155,11 @@ def initialize(param, phn, opt, tb_writer):
     ray = torch.from_numpy(ray).to(phn.device, dtype=torch.float32)
     param_dict = phn(ray)
     weights = []
-    # weights += [(param_dict["pcs_weight"]).ravel()] 
-    # weights += [(param_dict["pns_weight"]).ravel()]
+    weights += [(param_dict["pe_weight"]).ravel()] 
+    weights += [(param_dict["pf_weight"]).ravel()]
     weights += [(param_dict["po_weight"]).ravel()]
+    weights += [(param_dict["pcs_weight"]).ravel()] 
+    weights += [(param_dict["pns_weight"]).ravel()]
     weights = torch.concatenate(weights, dim=0)
     loss = torch.norm(weights-param)
     opt.zero_grad(set_to_none=True)
@@ -167,21 +169,29 @@ def initialize(param, phn, opt, tb_writer):
     return loss.cpu().item()
 
 def init_phn_output(agent, phn, tb_writer, max_step=1000):
+    pe_weight = None
+    pf_weight = None
     po_weight = None
-    # pcs_weight = None
-    # pns_weight = None
+    pcs_weight = None
+    pns_weight = None
     for name, param in agent.named_parameters():
+        if name == "project_embeddings.weight":
+            pe_weight = param.data.ravel()
+        if name == "project_fixed_context.weight":
+            pf_weight = param.data.ravel()
         if name == "project_out.weight":
             po_weight = param.data.ravel()
-        # if name == "project_current_vehicle_state.weight":
-        #     pcs_weight = param.data.ravel()
-        # if name == 'project_node_state.weight':
-        #     pns_weight = param.data.ravel()
+        if name == "project_current_vehicle_state.weight":
+            pcs_weight = param.data.ravel()
+        if name == 'project_node_state.weight':
+            pns_weight = param.data.ravel()
         
     weights = []
-    # weights += [pcs_weight.detach().clone()]
-    # weights += [pns_weight.detach().clone()]
+    weights += [pe_weight.detach().clone()]
+    weights += [pf_weight.detach().clone()]
     weights += [po_weight.detach().clone()]
+    weights += [pcs_weight.detach().clone()]
+    weights += [pns_weight.detach().clone()]
     weights = torch.concatenate(weights, dim=0)
     opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     for i in range(max_step):

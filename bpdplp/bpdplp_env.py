@@ -5,12 +5,12 @@ import numba as nb
 
 from bpdplp.bpdplp import TIME_HORIZONS, SPEED_PROFILES
 
-@nb.jit(nb.int64[:](nb.float32[:,:],nb.float32[:]),nopython=True,cache=True)
+@nb.jit(nb.int64[:](nb.float32[:,:],nb.float32[:]),nopython=True,cache=True,parallel=True)
 def find_passed_hz(time_horizons, current_times):
     passed_hz = np.empty(len(current_times), dtype=np.int64)
     _, n_hz = time_horizons.shape
     l_ct = len(current_times)
-    for i in range(l_ct):
+    for i in nb.prange(l_ct):
         for j in range(n_hz):
             if time_horizons[i,j] > current_times[i]:
                 passed_hz[i] = j
@@ -92,7 +92,6 @@ class BPDPLP_Env(object):
         planning_time_repeated = np.repeat(planning_time_repeated, self.num_nodes, 2)
         planning_time_repeated = planning_time_repeated.ravel()
         self.time_horizons_repeated = TIME_HORIZONS*planning_time_repeated[:, np.newaxis]
-        self.time_horizons = TIME_HORIZONS[None, :]*self.planning_time[:, None]
         #repeat-use variables
         self.is_depot_feasible = np.asanyarray([[[False]]*self.max_num_vehicles]*self.batch_size)
         self.vehicle_idx = np.arange(self.max_num_vehicles)[np.newaxis,:,np.newaxis]
@@ -194,8 +193,6 @@ class BPDPLP_Env(object):
         # for delivery, feasible for the k-th vehicle 
         # if pickup is visited, and is assigned to the k-th vehicle
         # and it is not visited yet
-        # is_assigned_to_vec = 
-        
         is_assigned_to_vec = self.request_assignment[:,np.newaxis,:] == self.vehicle_idx
         is_delivery_feasible = np.logical_and(is_assigned_to_vec, is_pickup_visited[:,np.newaxis,:])
         is_delivery_feasible = np.logical_and(is_delivery_feasible, np.logical_not(is_delivery_visited[:,np.newaxis,:]))
@@ -225,9 +222,9 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    @profile
+    # @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
-        assert (len(batch_idx) == self.batch_size)
+        # assert (len(batch_idx) == self.batch_size)
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
         f1 = travel_time_vecs
