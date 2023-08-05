@@ -5,9 +5,11 @@ import torch
 from torch.nn import Linear
 import torch.nn.functional as F
 
+from model.graph_encoder import GraphAttentionEncoder
+from model.categorical import Categorical
+
 CPU_DEVICE = torch.device("cpu")
 
-from model.graph_encoder import GraphAttentionEncoder
 
 # class Agent(torch.jit.ScriptModule):
 class Agent(torch.nn.Module):
@@ -114,10 +116,10 @@ class Agent(torch.nn.Module):
         # kalau sama harusnya bener     
         concated_heads = heads.permute(1,2,3,0,4).contiguous()
         concated_heads = concated_heads.view(batch_size, num_vehicles, 1, self.embed_dim)
-        if param_dict is not None:
-            final_Q = F.linear(concated_heads, param_dict["po_weight"])
-        else:
-            final_Q = self.project_out(concated_heads)
+        # if param_dict is not None:
+        final_Q = F.linear(concated_heads, param_dict["po_weight"])
+        # else:
+        #     final_Q = self.project_out(concated_heads)
         logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
         logits = torch.tanh(logits) * self.tanh_clip
         logits = logits.squeeze(2) + feasibility_mask.float().log()
@@ -138,9 +140,16 @@ class Agent(torch.nn.Module):
 
         Return: index of operations, log of probabilities
         '''
+        batch_size, num_choice = probs.shape
+        batch_idx = torch.arange(batch_size, device=self.device)
+        
         if self.training:
-            dist = torch.distributions.Categorical(probs)
+            dist = Categorical(probs.shape)
+            dist.set_probs(probs)
+            # dist = torch.distributions.Categorical(probs)
             op = dist.sample()
+            while torch.any(probs[batch_idx, op[:]]==0):
+                op = dist.sample()
             logprob = dist.log_prob(op)
             entropy = dist.entropy()
         else:

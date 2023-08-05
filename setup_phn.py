@@ -5,9 +5,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from bpdplp.bpdplp import BPDPLP
-from model.agent import Agent
+from model.agent_mo import Agent
 from model.phn import PHN
-from validator import load_validator
 from utils import instance_to_batch
 
 CPU_DEVICE = torch.device("cpu")
@@ -64,16 +63,23 @@ def setup_phn(args, load_best=False, validation=False):
         print("CHECKPOINT NOT FOUND! new run?")
 
     phn = get_phn(args, args.embed_dim)
+    critic_phn = get_phn(args, args.embed_dim)
+    training_nondom_list = None
+    validation_nondom_list = None
+    critic_solution_list = None
     opt = torch.optim.Adam(phn.parameters(), args.lr)
-    validator = load_validator(args)
     last_epoch = 0
+
     if checkpoint is not None:
-        phn_state_dict = checkpoint["phn_state_dict"]
-        phn.load_state_dict(phn_state_dict)
+        critic_phn.load_state_dict(checkpoint["critic_phn_state_dict"])
+        phn.load_state_dict(checkpoint["phn_state_dict"])
+        training_nondom_list = checkpoint["training_nondom_list"]
+        validation_nondom_list = checkpoint["validation_nondom_list"]
+        critic_solution_list = checkpoint["critic_solution_list"]
         last_epoch = checkpoint["epoch"] 
         
     test_instance = BPDPLP(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
     test_batch = instance_to_batch(test_instance)
     test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
     test_batch2 = instance_to_batch(test_instance2)
-    return agent, phn, opt, validator, tb_writer, test_batch, test_batch2, last_epoch
+    return agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch
