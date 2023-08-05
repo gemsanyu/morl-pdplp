@@ -1,3 +1,4 @@
+import profile
 import time
 
 import numpy as np
@@ -12,10 +13,24 @@ def find_passed_hz(time_horizons, current_times):
     _, n_hz = time_horizons.shape
     l_ct = len(current_times)
     for i in nb.prange(l_ct):
-        for j in range(n_hz):
-            if time_horizons[i,j] > current_times[i]:
-                passed_hz[i] = j
-                break
+        if time_horizons[i,3] > current_times[i]:
+            if time_horizons[i,1] > current_times[i]:
+                # if time_horizons[i,0] > current_times[i]:
+                #     passed_hz[i]=0
+                # else: this never happens, th[i,0]=0
+                passed_hz[i]=1
+            elif time_horizons[i,2] > current_times[i]:
+                passed_hz[i]=2
+            else:
+                passed_hz[i]=3
+        elif time_horizons[i,4] > current_times[i]:
+            passed_hz[i]=4
+        else:
+            passed_hz[i]=5
+        # for j in range(n_hz):
+        #     if time_horizons[i,j] > current_times[i]:
+        #         passed_hz[i] = j
+        #         break
     return passed_hz
 
 @nb.jit(nb.float32(nb.float32, nb.float32, nb.int64, nb.float32[:], nb.float32[:]), cache=True, nopython=True)
@@ -147,7 +162,7 @@ class BPDPLP_Env(object):
         features = np.concatenate([norm_current_coords, features], axis=-1)
         return features
     
-
+    # @profile
     def get_travel_time(self):
         current_location_idx = self.current_location_idx.flatten()
         distances_list = self.distance_matrix[self.batch_vec_idx, current_location_idx,:].flatten()

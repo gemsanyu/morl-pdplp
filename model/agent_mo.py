@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.distributions.utils import probs_to_logits
 
 from model.graph_encoder import GraphAttentionEncoder
+from model.categorical import Categorical
 
 CPU_DEVICE = torch.device("cpu")
 
@@ -113,13 +114,13 @@ class Agent(torch.nn.Module):
         _, num_vehicles, _ = vehicle_dynamic_features.shape
         n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
-        if param_dict is not None:       
-            projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
-            node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
+        # if param_dict is not None:       
+        # projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
+        # node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
             # glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
-        else:
-            projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
-            node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+        # else:
+        projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
+        node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
         glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
@@ -148,10 +149,10 @@ class Agent(torch.nn.Module):
         # kalau sama harusnya bener     
         concated_heads = heads.permute(1,2,3,0,4).contiguous()
         concated_heads = concated_heads.view(batch_size, num_vehicles, 1, self.embed_dim)
-        if param_dict is not None:
-            final_Q = F.linear(concated_heads, param_dict["po_weight"])
-        else:
-            final_Q = self.project_out(concated_heads)
+        # if param_dict is not None:
+        final_Q = F.linear(concated_heads, param_dict["po_weight"])
+        # else:
+        #     final_Q = self.project_out(concated_heads)
         logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
         logits = torch.tanh(logits) * self.tanh_clip
         logits = logits.squeeze(2) + feasibility_mask.float().log()
@@ -162,7 +163,7 @@ class Agent(torch.nn.Module):
         selected_nodes = op % num_nodes
         return selected_vecs, selected_nodes, logprob_list, entropy_list
 
-    # @torch.jit.ignore
+   # @torch.jit.ignore
     def select(self, probs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
         ### Select next to be executed.

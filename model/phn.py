@@ -30,9 +30,26 @@ class PHN(T.nn.Module):
                                         nn.Linear(ray_hidden_size, ray_hidden_size),
                                         nn.ReLU(inplace=True),
                                         nn.Linear(ray_hidden_size, ray_hidden_size))
-        # self.pcs_layer = nn.Linear(ray_hidden_size, self.current_state_dim*num_neurons)
-        # self.pns_layer = nn.Linear(ray_hidden_size, self.num_node_dynamic_features*3*num_neurons)
-        self.po_layer = nn.Linear(ray_hidden_size, num_neurons*num_neurons)
+        # self.pe_layer = nn.Sequential(
+        #     nn.Linear(ray_hidden_size, ray_hidden_size),
+        #     nn.Linear(ray_hidden_size, 3*num_neurons*num_neurons)
+        # )
+        # self.pf_layer = nn.Sequential(
+        #     nn.Linear(ray_hidden_size, ray_hidden_size),
+        #     nn.Linear(ray_hidden_size, num_neurons*num_neurons)
+        # ) 
+        # self.pcs_layer = nn.Sequential(
+        #     nn.Linear(ray_hidden_size, ray_hidden_size),
+        #     nn.Linear(ray_hidden_size, self.current_state_dim*num_neurons)
+        # )
+        # self.pns_layer = nn.Sequential(
+        #     nn.Linear(ray_hidden_size, ray_hidden_size),
+        #     nn.Linear(ray_hidden_size, self.num_node_dynamic_features*3*num_neurons)
+        # )
+        self.po_layer = nn.Sequential(
+            nn.Linear(ray_hidden_size, ray_hidden_size),
+            nn.Linear(ray_hidden_size, num_neurons*num_neurons)
+        )
         self.ray_hidden_size = ray_hidden_size
         self.num_neurons = num_neurons
         self.device = device
