@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from arguments import get_parser
 from bpdplp.bpdplp import BPDPLP
@@ -64,8 +65,9 @@ def encode(agent, static_features):
     
     node_embeddings = node_so_embeddings + node_temporal_embeddings
     graph_embeddings = graph_so_embeddings + graph_temporal_embeddings
-    fixed_context = agent.project_fixed_context(graph_embeddings)
-    glimpse_K_static, glimpse_V_static, logits_K_static = agent.project_embeddings(node_embeddings).chunk(3, dim=-1)
+    fixed_context = F.linear(graph_embeddings, agent.pf_weight)
+    projected_embeddings = F.linear(node_embeddings, agent.pe_weight)
+    glimpse_K_static, glimpse_V_static, logits_K_static = projected_embeddings.chunk(3, dim=-1)
     glimpse_K_static = agent._make_heads(glimpse_K_static)
     glimpse_V_static = agent._make_heads(glimpse_V_static)
     return node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static

@@ -30,9 +30,28 @@ class PHN(T.nn.Module):
                                         nn.Linear(ray_hidden_size, ray_hidden_size),
                                         nn.ReLU(inplace=True),
                                         nn.Linear(ray_hidden_size, ray_hidden_size))
-        # self.pcs_layer = nn.Linear(ray_hidden_size, self.current_state_dim*num_neurons)
-        # self.pns_layer = nn.Linear(ray_hidden_size, self.num_node_dynamic_features*3*num_neurons)
-        self.po_layer = nn.Linear(ray_hidden_size, num_neurons*num_neurons)
+        self.current_state_dim = num_neurons+4
+        self.num_node_dynamic_features = 1
+        self.pe_layer = nn.Sequential(
+            nn.Linear(ray_hidden_size, ray_hidden_size),
+            nn.Linear(ray_hidden_size, 3*num_neurons*num_neurons)
+        )
+        self.pf_layer = nn.Sequential(
+            nn.Linear(ray_hidden_size, ray_hidden_size),
+            nn.Linear(ray_hidden_size, num_neurons*num_neurons)
+        ) 
+        self.pcs_layer = nn.Sequential(
+            nn.Linear(ray_hidden_size, ray_hidden_size),
+            nn.Linear(ray_hidden_size, self.current_state_dim*num_neurons)
+        )
+        self.pns_layer = nn.Sequential(
+            nn.Linear(ray_hidden_size, ray_hidden_size),
+            nn.Linear(ray_hidden_size, self.num_node_dynamic_features*3*num_neurons)
+        )
+        self.po_layer = nn.Sequential(
+            nn.Linear(ray_hidden_size, ray_hidden_size),
+            nn.Linear(ray_hidden_size, num_neurons*num_neurons)
+        )
         self.ray_hidden_size = ray_hidden_size
         self.num_neurons = num_neurons
         self.device = device
@@ -56,12 +75,16 @@ class PHN(T.nn.Module):
         Return: appropriate weights
         '''
         ray_features = self.ray_layer(ray)
-        # pcs_weight = self.pcs_layer(ray_features).view(self.num_neurons,self.current_state_dim)
-        # pns_weight = self.pns_layer(ray_features).view(3*self.num_neurons, self.num_node_dynamic_features)
+        pf_weight = self.pf_layer(ray_features).view(self.num_neurons,self.num_neurons)
+        pe_weight = self.pe_layer(ray_features).view(3*self.num_neurons, self.num_neurons)
+        pcs_weight = self.pcs_layer(ray_features).view(self.num_neurons,self.current_state_dim)
+        pns_weight = self.pns_layer(ray_features).view(3*self.num_neurons, self.num_node_dynamic_features)
         po_weight = self.po_layer(ray_features).view(self.num_neurons, self.num_neurons)
         param_dict = {
-                    #  "pcs_weight":pcs_weight,
-                    #  "pns_weight":pns_weight,
+                     "pf_weight":pf_weight,
+                     "pe_weight":pe_weight,
+                     "pcs_weight":pcs_weight,
+                     "pns_weight":pns_weight,
                      "po_weight":po_weight,
                      }
         return param_dict
