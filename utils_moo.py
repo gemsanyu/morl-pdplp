@@ -35,10 +35,11 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
     nadir = np.concatenate(nadir, axis=0)
     utopia = np.concatenate(utopia, axis=0)
     A = batch_f_list-greedy_batch_f_list
+    # A = batch_f_list
     denom = (nadir-utopia)
-    denom[denom==0] = 1e-8
+    denom[denom==0] = 1
     norm_obj = (A-utopia)/denom
-    norm_obj = batch_f_list
+    # norm_obj = batch_f_list
 
     logprob_list = logprob_list.unsqueeze(2)
     loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
@@ -155,11 +156,11 @@ def initialize(param, phn, opt, tb_writer):
     ray = torch.from_numpy(ray).to(phn.device, dtype=torch.float32)
     param_dict = phn(ray)
     weights = []
-    weights += [(param_dict["pe_weight"]).ravel()] 
-    weights += [(param_dict["pf_weight"]).ravel()]
+    # weights += [(param_dict["pe_weight"]).ravel()] 
+    # weights += [(param_dict["pf_weight"]).ravel()]
+    # weights += [(param_dict["pcs_weight"]).ravel()] 
+    # weights += [(param_dict["pns_weight"]).ravel()]
     weights += [(param_dict["po_weight"]).ravel()]
-    weights += [(param_dict["pcs_weight"]).ravel()] 
-    weights += [(param_dict["pns_weight"]).ravel()]
     weights = torch.concatenate(weights, dim=0)
     loss = torch.norm(weights-param)
     opt.zero_grad(set_to_none=True)
@@ -169,60 +170,36 @@ def initialize(param, phn, opt, tb_writer):
     return loss.cpu().item()
 
 def init_phn_output(agent, phn, tb_writer, max_step=1000):
-    pe_weight = None
-    pf_weight = None
+    # pe_weight = None
+    # pf_weight = None
+    # pcs_weight = None
+    # pns_weight = None
     po_weight = None
-    pcs_weight = None
-    pns_weight = None
     for name, param in agent.named_parameters():
-        if name == "project_embeddings.weight":
-            pe_weight = param.data.ravel()
-        if name == "project_fixed_context.weight":
-            pf_weight = param.data.ravel()
+        # if name == "project_embeddings.weight":
+        #     pe_weight = param.data.ravel()
+        # if name == "project_fixed_context.weight":
+        #     pf_weight = param.data.ravel()
+        # if name == "project_current_vehicle_state.weight":
+        #     pcs_weight = param.data.ravel()
+        # if name == 'project_node_state.weight':
+        #     pns_weight = param.data.ravel()
         if name == "project_out.weight":
             po_weight = param.data.ravel()
-        if name == "project_current_vehicle_state.weight":
-            pcs_weight = param.data.ravel()
-        if name == 'project_node_state.weight':
-            pns_weight = param.data.ravel()
+        
         
     weights = []
-    weights += [pe_weight.detach().clone()]
-    weights += [pf_weight.detach().clone()]
+    # weights += [pe_weight.detach().clone()]
+    # weights += [pf_weight.detach().clone()]
+    # weights += [pcs_weight.detach().clone()]
+    # weights += [pns_weight.detach().clone()]
     weights += [po_weight.detach().clone()]
-    weights += [pcs_weight.detach().clone()]
-    weights += [pns_weight.detach().clone()]
     weights = torch.concatenate(weights, dim=0)
     opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     for i in range(max_step):
         loss = initialize(weights,phn,opt_init,tb_writer)
         if loss < 1e-4:
             break
-
-def update_policy(policy_type:str, policy:Policy, sample_list, score_list):
-    if policy_type == "r1-nes":
-        # score_list = np.concatenate(score_list, axis=1)
-        # score_list = np.mean(score_list, axis=1, keepdims=True)
-        x_list = sample_list - policy.mu
-        w_list = x_list/math.exp(policy.ld)
-        policy.update(w_list, x_list, score_list)
-    elif policy_type == "crfmnes":
-        policy.update(sample_list, score_list)
-    return policy
-
-def save_policy(policy, epoch, title):
-    checkpoint_root = "checkpoints"
-    checkpoint_dir = pathlib.Path(".")/checkpoint_root/title
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_path = checkpoint_dir/(title+".pt")
-    checkpoint = {
-        "policy":policy,
-        "epoch":epoch,
-    }
-    # save twice to prevent failed saving,,, damn
-    torch.save(checkpoint, checkpoint_path.absolute())
-    checkpoint_backup_path = checkpoint_path.parent /(checkpoint_path.name + "_")
-    torch.save(checkpoint, checkpoint_backup_path.absolute())
 
 def save_phn(title, epoch, phn, critic_phn, opt, training_nondom_list, validation_nondom_list, critic_solution_list):
     checkpoint_root = "checkpoints"

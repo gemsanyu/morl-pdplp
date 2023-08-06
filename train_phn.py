@@ -28,7 +28,7 @@ def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos
     tb_writer.add_scalar("Cos Penalty Loss", cos_penalty_loss_list.mean(), epoch)
     
 def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
-    small_batch = 4
+    small_batch = args.batch_size
     real_batch = args.batch_size
     train_dataloader = DataLoader(train_dataset, batch_size=small_batch, shuffle=True, pin_memory=True, num_workers=2)
     ld = 10 if init_stage else args.ld 

@@ -5,9 +5,10 @@ import torch
 from torch.nn import Linear
 import torch.nn.functional as F
 
-CPU_DEVICE = torch.device("cpu")
-
 from model.graph_encoder import GraphAttentionEncoder
+from model.categorical import Categorical
+
+CPU_DEVICE = torch.device("cpu")
 
 # class Agent(torch.jit.ScriptModule):
 class Agent(torch.nn.Module):
@@ -71,13 +72,13 @@ class Agent(torch.nn.Module):
         n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
         # if param_dict is not None:       
-        projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
-        node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
-        glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
-        # else:
-        # projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
-        # node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+        # projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
+        # node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
         # glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        # else:
+        projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
+        node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+        glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
         glimpse_V_dynamic = glimpse_V_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
@@ -109,7 +110,8 @@ class Agent(torch.nn.Module):
         selected_nodes = op % num_nodes
         return selected_vecs, selected_nodes, logprob_list, entropy_list
 
-    # @torch.jit.ignore
+   # @torch.jit.ignore
+    # @profile
     def select(self, probs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
         ### Select next to be executed.
@@ -119,11 +121,13 @@ class Agent(torch.nn.Module):
 
         Return: index of operations, log of probabilities
         '''
-        batch_size, _ = probs.shape
+        batch_size, num_choice = probs.shape
         batch_idx = torch.arange(batch_size, device=self.device)
         
         if self.training:
-            dist = torch.distributions.Categorical(probs)
+            dist = Categorical(probs.shape)
+            dist.set_probs(probs)
+            # dist = torch.distributions.Categorical(probs)
             op = dist.sample()
             while torch.any(probs[batch_idx, op[:]]==0):
                 op = dist.sample()
