@@ -5,6 +5,9 @@ from model.agent_so import Agent
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from pdptw.pdptw import PDPTW
+from utils import instance_to_batch
+
 def setup(args, load_best=False):
     agent = Agent(num_node_static_features=4,
                   num_vehicle_dynamic_features=2,
@@ -45,5 +48,7 @@ def setup(args, load_best=False):
         best_validation_score = checkpoint["best_validation_score"]
         opt.load_state_dict(checkpoint["agent_opt_state_dict"])
         last_epoch = checkpoint["epoch"]    
-
-    return agent, opt, best_agent_state_dict, best_validation_score, tb_writer, last_epoch
+    test_instance = PDPTW(instance_name="bar-n100-1",num_vehicles=6)
+    test_batch = instance_to_batch(test_instance)
+    
+    return agent, opt, best_agent_state_dict, best_validation_score, tb_writer, test_batch, last_epoch

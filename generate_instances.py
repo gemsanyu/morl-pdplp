@@ -3,12 +3,12 @@ import pathlib
 
 import numpy as np
 
-from bpdplp.bpdplp import BPDPLP
-from bpdplp.utils import RANDOM, RANDOMCLUSTER, CLUSTER, CENTRAL, read_graph
+from pdptw.pdptw import PDPTW
+from pdptw.utils import RANDOM, RANDOMCLUSTER, CLUSTER, CENTRAL, read_graph
 
 def generate(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx):
     # nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx = config
-    instance = BPDPLP(num_requests=nr,
+    instance = PDPTW(num_requests=nr,
                       num_vehicles=nv,
                       num_cluster=nc,
                       cluster_delta=cd,
@@ -33,25 +33,24 @@ def generate(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx):
                         norm_service_durations=instance.norm_service_durations,
                         distance_matrix=instance.distance_matrix,
                         norm_distance_matrix=instance.norm_distance_matrix,
-                        road_types=instance.road_types,
                         max_capacity=instance.max_capacity)
     
 
 def run():
-    num_samples_per_config = 1
-    num_requests_list = [50]
+    num_samples_per_config = 2
+    num_requests_list = [5]
     num_vehicles_list = [1,2,3,5]
     num_clusters_list = [3,4,5,6,7,8]
     cluster_delta_list = [1,1.2,1.6]
     planning_time_list = [240,480]
     time_window_length_list = [60,120]
     max_capacity_list = [100,300]
-    distribution_list = [RANDOM]
+    distribution_list = [RANDOM, RANDOMCLUSTER, CLUSTER]
     depot_location_list = [RANDOM, CENTRAL]
     mode ="training"
     graph_seed = read_graph("barcelona.txt")
     config_list = [(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx) for nr in num_requests_list for nv in num_vehicles_list for nc in num_clusters_list for cd in cluster_delta_list for pt in planning_time_list for twl in time_window_length_list for mc in max_capacity_list for d in distribution_list for dl in depot_location_list for idx in range(num_samples_per_config)]
-    with Pool(processes=12) as pool:
+    with Pool(processes=4) as pool:
         L = pool.starmap(generate, config_list)
 
 if __name__ == "__main__":
