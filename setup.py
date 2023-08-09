@@ -30,14 +30,14 @@ def get_agent(args) -> Agent:
 def get_tb_writer(args, validation=True)->SummaryWriter:
     summary_root = "runs"
     summary_dir = pathlib.Path(".")/summary_root
-    prec = "val" if validation else ""
+    prec = ""
     model_summary_dir = summary_dir/(prec+args.title)
     model_summary_dir.mkdir(parents=True, exist_ok=True)
     tb_writer = SummaryWriter(log_dir=model_summary_dir.absolute())
     return tb_writer
 
-def setup(args, load_best=False, validation=False):
-    tb_writer = get_tb_writer(args, validation)    
+def setup(args):
+    tb_writer = get_tb_writer(args)    
 
     checkpoint_root = "checkpoints"
     checkpoint_dir = pathlib.Path(".")/checkpoint_root/args.title
@@ -46,9 +46,7 @@ def setup(args, load_best=False, validation=False):
     critic = get_agent(args)
     
     checkpoint_path = checkpoint_dir/(args.title+".pt")
-    if load_best:
-        checkpoint_path = checkpoint_dir/(args.title+"_best.pt")
-    
+
     checkpoint = None
     if os.path.isfile(checkpoint_path.absolute()):
         checkpoint = torch.load(checkpoint_path.absolute(), map_location=args.device)
@@ -65,8 +63,8 @@ def setup(args, load_best=False, validation=False):
     if checkpoint is not None:
         agent.load_state_dict(checkpoint["agent_state_dict"])
         critic.load_state_dict(checkpoint["critic_state_dict"])
-        critic_solution_list = checkpoint["critic_nondom_list"]
-        training_nondom_list = checkpoint["training_nondom_list"]
+        critic_solution_list = checkpoint["critic_solution_list"]
+        # training_nondom_list = checkpoint["training_nondom_list"]
         validation_nondom_list = checkpoint["validation_nondom_list"]
         last_epoch = checkpoint["epoch"] 
         

@@ -49,6 +49,10 @@ def get_parser():
                         type=int,
                         default=128,
                         help="phn ray hidden size")
+    parser.add_argument('--num-ray',
+                        type=int,
+                        default=100,
+                        help="num ray esp. for test")
     
     # agent base or AM
     parser.add_argument('--lr',

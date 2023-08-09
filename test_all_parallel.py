@@ -22,7 +22,7 @@ def test_all_parallel(instances_name_list, num_vehicles_list, title, num_ray):
     #     test(*config)
 
 if __name__ == "__main__":
-    title="hnc-phn"
+    title="moco-hnc"
     num_ray=200
 
     instances_name_list = [

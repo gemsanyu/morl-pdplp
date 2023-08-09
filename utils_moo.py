@@ -27,24 +27,9 @@ def get_hv_d(batch_f_list):
 
 def compute_loss(logprobs, reward_list, ray):
     device = logprobs.device
-    # nadir = []
-    # utopia = []
-    # for i in range(len(reward_list)):
-    #     nondom_sols =  training_nondom_list[idx_list[i]]
-    #     nadir += [np.max(nondom_sols, axis=0, keepdims=True)]
-    #     utopia += [np.min(nondom_sols, axis=0, keepdims=True)]
-    # nadir = np.concatenate(nadir, axis=0)[:,np.newaxis,:]
-    # utopia = np.concatenate(utopia, axis=0)[:,np.newaxis,:]
-    
-    # denom = nadir-utopia
-    # denom[denom==0]=1
-    # reward_list *= -1
-    # reward_list = (reward_list-utopia)/denom
-    # reward_list *= -1
     reward_list /= reward_list.sum(axis=1, keepdims=True)
     reward_list = torch.from_numpy(reward_list).to(device)
     ray = ray[None, None, :]
-    # print(reward_list)
     tch_reward = ray*(reward_list)
     tch_reward, _ = tch_reward.max(dim=-1)
     tch_advantage = tch_reward - tch_reward.mean(dim=1, keepdim=True)

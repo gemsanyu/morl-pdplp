@@ -122,7 +122,7 @@ def compare_with_critic(agent, critic, validation_nondom_list, solution_list, cr
     return critic_solution_list, critic
 
 def validate_with_test(agent:Agent, test_batch, test_batch2, tb_writer, epoch):
-    ray_list =  get_ray_list(50, agent.device)
+    ray_list =  get_ray_list(50, agent.device, is_random=False)
     test_f_list = []
     for ray in ray_list:
         agent.get_param_dict(ray)
