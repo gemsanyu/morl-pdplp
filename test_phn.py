@@ -7,9 +7,8 @@ import torch
 
 from bpdplp.bpdplp_env import BPDPLP_Env
 from bpdplp.bpdplp_dataset import BPDPLP_Dataset
-from utils_moo import prepare_args, generate_params, solve_one_batch
-from utils import encode, solve_decode_only
-from validator import save_validator
+from utils_moo import generate_params, solve_one_batch, get_ray_list
+from utils import encode, solve_decode_only, prepare_args
 from setup_phn import setup_phn
 
 """
@@ -20,8 +19,9 @@ encoding and decoding can be timed separately
 def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     agent.eval()
     total_start = time.time()
-    ray_list, param_dict_list = generate_params(phn, num_ray, agent.device)
-    num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = test_batch
+    ray_list =  get_ray_list(num_ray, agent.device)
+    param_dict_list = generate_params(phn, ray_list)
+    _, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = test_batch
     env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
     static_features,_,_,_ = env.begin()
     encode_start = time.time()
@@ -35,7 +35,7 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     logprob_list = []
     for param_dict in param_dict_list:
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
-        tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies = solve_results
+        tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, sum_logprobs, sum_entropies = solve_results
         f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
         batch_f_list += [f_list]
         logprob_list += [sum_logprobs.unsqueeze(1)]
@@ -59,7 +59,7 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     
 
 def run(args):
-    agent, phn, _, validator, tb_writer, test_batch, _, _ = setup_phn(args, validation=True)
+    agent, _, phn, _, _, _, _, _, test_batch, _, _ = setup_phn(args, validation=True)
     result_dir = pathlib.Path(".")/"result"/args.title
     result_dir.mkdir(parents=True, exist_ok=True)
     title = args.test_instance_name +"-"+str(args.test_num_vehicles) + "-" + args.title
