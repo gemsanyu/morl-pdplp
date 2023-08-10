@@ -4,36 +4,44 @@ import time
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from bpdplp.bpdplp_env import BPDPLP_Env
-from utils_moo import prepare_args, generate_params
-from utils import encode, solve_decode_only
-from setup_phn import setup_phn
+from model.agent import Agent
+from utils_moo import get_ray_list
+from utils import encode_strict, solve_decode_only,prepare_args
+from setup import setup
 
 """
 actually copying solve_one_batch, but is done so that 
 encoding and decoding can be timed separately
 """
 @torch.no_grad()
-def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
+def test(agent: Agent, test_batch, x_file, y_file, t_file, num_ray=200):
     agent.eval()
     total_start = time.time()
-    ray_list, param_dict_list = generate_params(phn, num_ray, agent.device)
-    num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = test_batch
+    ray_list = get_ray_list(num_ray, agent.device)
+    idx,num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = test_batch
     env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
     static_features,_,_,_ = env.begin()
     encode_start = time.time()
     static_features = torch.from_numpy(static_features).to(agent.device)
-    encode_results = encode(agent, static_features)
-    node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
+    encode_results = encode_strict(agent, static_features)
+    node_embeddings, graph_embeddings = encode_results
     encode_duration = time.time()-encode_start
 
     decode_start = time.time()
     batch_f_list = [] 
     logprob_list = []
-    for param_dict in param_dict_list:
-        solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
-        tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, sum_logprobs, sum_entropies = solve_results
+    for ray in ray_list:
+        agent.get_param_dict(ray)
+        fixed_context = F.linear(graph_embeddings, agent.pf_weight)
+        projected_embeddings = F.linear(node_embeddings, agent.pe_weight)
+        glimpse_K_static, glimpse_V_static, logits_K_static = projected_embeddings.chunk(3, dim=-1)
+        glimpse_K_static = agent._make_heads(glimpse_K_static)
+        glimpse_V_static = agent._make_heads(glimpse_V_static)
+        solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
+        tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, sum_logprobs, sum_entropies = solve_results
         f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
         batch_f_list += [f_list]
         logprob_list += [sum_logprobs.unsqueeze(1)]
@@ -57,7 +65,7 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     
 
 def run(args):
-    agent, phn, _, validator, tb_writer, test_batch, _, _ = setup_phn(args, validation=True)
+    agent, critic, _, _, _, _, _, test_batch, _, _ = setup(args)
     result_dir = pathlib.Path(".")/"result"/args.title
     result_dir.mkdir(parents=True, exist_ok=True)
     title = args.test_instance_name +"-"+str(args.test_num_vehicles) + "-" + args.title
@@ -65,7 +73,7 @@ def run(args):
     x_file_path = result_dir/(title+".x")
     t_file_path = result_dir/(title+".t")
     with open(x_file_path.absolute(), "w") as x_file, open(y_file_path.absolute(), "w") as y_file, open(t_file_path.absolute(), "w") as t_file:
-        test(agent,phn,test_batch,x_file,y_file,t_file,args.num_ray)
+        test(critic,test_batch,x_file,y_file,t_file,args.num_ray)
 
 if __name__ == "__main__":
     args = prepare_args()
