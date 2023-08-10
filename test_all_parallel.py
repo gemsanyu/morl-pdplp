@@ -16,7 +16,7 @@ def test_proc(instance_name, num_vehicles, title, num_ray):
 
 def test_all_parallel(instances_name_list, num_vehicles_list, title, num_ray):
     config_list = [(instance_name, num_vehicles, title, num_ray) for instance_name in instances_name_list for num_vehicles in num_vehicles_list]
-    with mp.Pool(4) as pool:
+    with mp.Pool(20) as pool:
         pool.starmap(test_proc, config_list)
     # for config in config_list:
     #     test(*config)
