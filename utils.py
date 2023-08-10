@@ -55,6 +55,17 @@ def encode(agent: Agent, static_features):
     glimpse_V_static = agent._make_heads(glimpse_V_static)
     return node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static
 
+def encode_strict(agent: Agent, static_features):
+    num_requests = int((static_features.shape[1]-1)//2)
+    depot_static_features = static_features[:, 0].unsqueeze(1)
+    delivery_static_features = static_features[:,num_requests+1:]
+    pickup_static_features = torch.concat([static_features[:,1:num_requests+1], delivery_static_features], dim=2)
+    depot_init_embedding = agent.depot_embedder(depot_static_features)
+    pickup_init_embedding = agent.pick_embedder(pickup_static_features)
+    delivery_init_embedding = agent.delivery_embedder(delivery_static_features)
+    node_init_embeddings = torch.concat([depot_init_embedding, pickup_init_embedding, delivery_init_embedding], dim=1)
+    node_embeddings, graph_embeddings = agent.gae(node_init_embeddings)
+    return node_embeddings, graph_embeddings
 
 
 """
