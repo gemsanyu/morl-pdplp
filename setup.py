@@ -8,10 +8,13 @@ from torch.utils.tensorboard import SummaryWriter
 from pdptw.pdptw import PDPTW
 from utils import instance_to_batch
 
+NUM_NODE_STATIC_FEATURES=4
+NUM_VEHICLE_DYNAMIC_FEATURES=2
+NUM_NODE_DYNAMIC_FEATURES=2
 def setup(args, load_best=False):
-    agent = Agent(num_node_static_features=4,
-                  num_vehicle_dynamic_features=2,
-                  num_node_dynamic_features=1,
+    agent = Agent(num_node_static_features=NUM_NODE_STATIC_FEATURES,
+                  num_vehicle_dynamic_features=NUM_VEHICLE_DYNAMIC_FEATURES,
+                  num_node_dynamic_features=NUM_NODE_DYNAMIC_FEATURES,
                   n_heads=args.n_heads,
                   n_gae_layers=args.n_gae_layers,
                   embed_dim=args.embed_dim,

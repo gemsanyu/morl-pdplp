@@ -118,8 +118,6 @@ def validate_one_epoch(agent, validation_dataset, test_batch, best_validation_sc
     tb_writer.add_scalar("Test Travel Time", test_travel_time.mean(), epoch)
     tb_writer.add_scalar("Test Unserved Count", test_num_node_not_visited.mean(), epoch)
 
-
-
     if best_validation_score is None:
         best_validation_score = validation_score_list
         best_agent = copy.deepcopy(agent)

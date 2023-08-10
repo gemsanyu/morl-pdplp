@@ -107,10 +107,30 @@ class PDPTW_Env(object):
     @property
     # @profile    
     def node_dynamic_features(self):
+        node_dynamic_features = []
         travel_time_list = self.get_travel_time()
         norm_travel_time_list = travel_time_list/self.planning_time[:,np.newaxis,np.newaxis]
         norm_travel_time_list = norm_travel_time_list[:,:,:,np.newaxis]
-        return norm_travel_time_list
+        node_dynamic_features += [norm_travel_time_list]
+        
+        # current_time = self.current_time[:,:,np.newaxis]
+        # arrival_time = travel_time_list + current_time
+        # late_tw = self.time_windows[:,:,1][:,np.newaxis,:]
+        # diff_arrival_time_to_late_tw = late_tw - arrival_time
+        # norm_diff_at_to_ltw = diff_arrival_time_to_late_tw/self.planning_time[:,np.newaxis,np.newaxis]
+        # norm_diff_at_to_ltw = norm_diff_at_to_ltw[:,:,:,np.newaxis]
+        # node_dynamic_features += [norm_diff_at_to_ltw]
+
+        late_tw = self.time_windows[:,:,1][:,np.newaxis,:]
+        current_time = self.current_time[:,:,np.newaxis]
+        diff_from_current_time_to_late_tw = late_tw-current_time
+        norm_dfc_to_ltw = diff_from_current_time_to_late_tw/self.planning_time[:,np.newaxis,np.newaxis]
+        norm_dfc_to_ltw = norm_dfc_to_ltw[:,:,:,np.newaxis]
+        norm_dfc_to_ltw[norm_dfc_to_ltw<0] =0
+        node_dynamic_features += [norm_dfc_to_ltw]
+        
+        node_dynamic_features = np.concatenate(node_dynamic_features,axis=-1)
+        return node_dynamic_features
 
 
     @property
