@@ -11,16 +11,19 @@ from tqdm import tqdm
 from arguments import get_parser
 from pdptw.pdptw_env import PDPTW_Env
 from pdptw.pdptw_dataset import PDPTW_Dataset
-from utils import encode, solve_decode_only, update
+from utils import encode, solve_decode_only, update, update_step_only
 from utils import save, prepare_args
 from setup import setup
 
 C=10000
+ACTUAL_BATCH_SIZE = 128
 
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
     best_agent.eval()
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
+    propagated_batch_size = 0
+    ACTUAL_BATCH_SIZE = 16
+    train_dataloader = DataLoader(train_dataset, batch_size=ACTUAL_BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
     sum_advantage = 0
     sum_training_travel_time  = 0
     sum_node_node_not_visited = 0
@@ -55,8 +58,13 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
         logprob_list = logprob_list.sum(dim=-1)
         loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
         loss = loss.mean() - 0.05*sum_entropies.mean()
-        update(agent, opt, loss, args.max_grad_norm)
-        
+        loss.backward()
+        propagated_batch_size += ACTUAL_BATCH_SIZE
+        # update(agent, opt, loss, args.max_grad_norm)
+        if propagated_batch_size == args.batch_size:
+            update_step_only(agent, opt, args.max_grad_norm)
+            propagated_batch_size = 0
+
         sum_advantage += advantage_list.sum()
         sum_training_travel_time += travel_time.sum()
         sum_node_node_not_visited += num_node_not_visited.sum()
@@ -71,7 +79,7 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
 @torch.no_grad()
 def validate_one_epoch(agent, validation_dataset, test_batch, best_validation_score, best_agent, tb_writer, epoch):
     agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=2, pin_memory=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=ACTUAL_BATCH_SIZE, num_workers=2, pin_memory=True)
     validation_num_node_not_visited_list = []
     validation_travel_time_list = []
 
