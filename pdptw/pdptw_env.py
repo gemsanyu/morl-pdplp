@@ -103,6 +103,8 @@ class PDPTW_Env(object):
         
     """
         travel_time
+        remaining time till late
+        if the pickup is visited and delivery not visited yet
     """
     @property
     # @profile    
@@ -128,10 +130,26 @@ class PDPTW_Env(object):
         norm_dfc_to_ltw = norm_dfc_to_ltw[:,:,:,np.newaxis]
         norm_dfc_to_ltw[norm_dfc_to_ltw<0] =0
         node_dynamic_features += [norm_dfc_to_ltw]
-        
+
+        is_pickup_visited = self.is_node_visited[:,1:self.num_requests+1]
+        is_delivery_visited = self.is_node_visited[:,self.num_requests+1:]
+        is_pickup_not_delivered = np.logical_and(is_pickup_visited, np.logical_not(is_delivery_visited))
+        is_pickup_not_delivered = is_pickup_not_delivered[:, np.newaxis, :]
+        is_pickup_not_delivered_by_vec = np.logical_and(self.request_assignment_one_hot, is_pickup_not_delivered)
+        dummy_mask = np.zeros((self.batch_size, self.max_num_vehicles, self.num_requests+1))
+        is_pickup_not_delivered_by_vec = np.concatenate([dummy_mask, is_pickup_not_delivered_by_vec], axis=-1)
+        is_pickup_not_delivered_by_vec = is_pickup_not_delivered_by_vec[:,:,:,np.newaxis]
+        node_dynamic_features += [is_pickup_not_delivered_by_vec]    
         node_dynamic_features = np.concatenate(node_dynamic_features,axis=-1)
         return node_dynamic_features
 
+    @property
+    def request_assignment_one_hot(self):
+        eye = np.eye(self.max_num_vehicles+1)
+        eye[-1,-1] = 0
+        req_assignment_one_hot = eye[self.request_assignment].transpose(0,2,1)
+        req_assignment_one_hot = req_assignment_one_hot[:,:-1]
+        return req_assignment_one_hot
 
     @property
     # @profile

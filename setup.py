@@ -10,7 +10,7 @@ from utils import instance_to_batch
 
 NUM_NODE_STATIC_FEATURES=4
 NUM_VEHICLE_DYNAMIC_FEATURES=2
-NUM_NODE_DYNAMIC_FEATURES=2
+NUM_NODE_DYNAMIC_FEATURES=3
 def setup(args, load_best=False):
     agent = Agent(num_node_static_features=NUM_NODE_STATIC_FEATURES,
                   num_vehicle_dynamic_features=NUM_VEHICLE_DYNAMIC_FEATURES,
