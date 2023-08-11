@@ -43,8 +43,8 @@ def get_phn(args, num_neurons) -> PHN :
     phn = PHN(args.ray_hidden_size, num_neurons, args.device)
     return phn
 
-def setup_phn(args, load_best=False, validation=False):
-    tb_writer = get_tb_writer(args, validation)    
+def setup_phn(args):
+    tb_writer = get_tb_writer(args)    
 
     checkpoint_root = "checkpoints"
     checkpoint_dir = pathlib.Path(".")/checkpoint_root/args.title
@@ -53,8 +53,6 @@ def setup_phn(args, load_best=False, validation=False):
     agent = get_agent(args, agent_checkpoint_path)
     
     checkpoint_path = checkpoint_dir/(args.title+".pt")
-    if load_best:
-        checkpoint_path = checkpoint_dir/(args.title+"_best.pt")
     
     checkpoint = None
     if os.path.isfile(checkpoint_path.absolute()):
