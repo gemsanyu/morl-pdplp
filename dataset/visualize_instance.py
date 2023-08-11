@@ -10,7 +10,6 @@ if __name__ == "__main__":
     with open(instance_filename, "r") as instance_file:
         lines = instance_file.readlines()
         num_nodes = int(lines[4].split()[1])
-        print(num_nodes)
         coords = np.zeros((num_nodes+2,2), dtype=np.float32)
         for i in range(11, num_nodes+11):
             strings = lines[i].split()
@@ -18,8 +17,8 @@ if __name__ == "__main__":
             coords[idx, 0], coords[idx,1] = float(strings[1]), float(strings[2])
     m = folium.Map(location=np.asanyarray([[41.380234, 2.145042]]), zoom_start=12, tiles="Stamen Terrain")
     num_request = int((num_nodes-1)/2)
-    print(num_request)
-    for i in range(num_nodes):
+    chosen_arr = [0,1,2,3,num_request,num_request+1,num_request+2]
+    for i in chosen_arr:
         if i == 0:
             depot_icon = BeautifyIcon(
                 icon='home',
