@@ -47,14 +47,14 @@ def encode(agent, static_features, param_dict=None):
     delivery_init_embedding = agent.delivery_embedder(delivery_static_features)
     node_init_embeddings = torch.concat([depot_init_embedding, pickup_init_embedding, delivery_init_embedding], dim=1)
     node_embeddings, graph_embeddings = agent.gae(node_init_embeddings)
-    if param_dict is not None:
-        fixed_context = F.linear(graph_embeddings, param_dict["pf_weight"])
-    else:
-        fixed_context = agent.project_fixed_context(graph_embeddings)
-    if param_dict is not None:
-        projected_embeddings = F.linear(node_embeddings, param_dict["pe_weight"])
-    else:
-        projected_embeddings = agent.project_embeddings(node_embeddings)
+    # if param_dict is not None:
+    #     fixed_context = F.linear(graph_embeddings, param_dict["pf_weight"])
+    # else:
+    fixed_context = agent.project_fixed_context(graph_embeddings)
+    # if param_dict is not None:
+    #     projected_embeddings = F.linear(node_embeddings, param_dict["pe_weight"])
+    # else:
+    projected_embeddings = agent.project_embeddings(node_embeddings)
     glimpse_K_static, glimpse_V_static, logits_K_static = projected_embeddings.chunk(3, dim=-1)
     glimpse_K_static = make_heads(glimpse_K_static, agent.n_heads, agent.key_size)
     glimpse_V_static = make_heads(glimpse_V_static, agent.n_heads, agent.key_size)
