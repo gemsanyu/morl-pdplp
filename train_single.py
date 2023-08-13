@@ -47,8 +47,11 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
 
         score = travel_costs + late_penalties
         greedy_score = greedy_travel_costs + greedy_late_penalties
-        advantage_list = score-greedy_score
-        advantage_list = (advantage_list - advantage_list.mean())/advantage_list.std()
+        tc_adv = travel_costs-greedy_travel_costs
+        lp_adv = late_penalties-greedy_late_penalties
+        tc_adv = (tc_adv-tc_adv.mean())/tc_adv.std()
+        lp_adv = (lp_adv-lp_adv.mean())/lp_adv.std()
+        advantage_list = tc_adv + lp_adv       
         logprob_list = logprob_list.sum(dim=-1)
         loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
         loss = loss.mean() - 0.05*sum_entropies.mean()
@@ -119,7 +122,7 @@ def validate_one_epoch(agent, validation_dataset, best_validation_score, best_ag
     return is_improving, best_validation_score, best_agent
 
 def run(args):
-    max_patience = 30
+    max_patience = 10
     not_improving = 0
     agent, opt, best_agent_state_dict, best_validation_score, tb_writer, last_epoch = setup(args)
     best_agent = copy.deepcopy(agent)
