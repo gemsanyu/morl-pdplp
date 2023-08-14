@@ -34,26 +34,36 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
         utopia += [np.min(nondom_sols, axis=0, keepdims=True)[np.newaxis,:]]
     nadir = np.concatenate(nadir, axis=0)
     utopia = np.concatenate(utopia, axis=0)
-    A = batch_f_list-greedy_batch_f_list
+    # A = batch_f_list-greedy_batch_f_list
     # A = batch_f_list
     denom = (nadir-utopia)
     denom[denom==0] = 1
-    norm_obj = (A-utopia)/denom
+    # norm_obj = (A-utopia)/denom
+    batch_f_list = (batch_f_list-utopia)/denom
+    greedy_batch_f_list = (greedy_batch_f_list-utopia)/denom
+    A = batch_f_list-greedy_batch_f_list
     # norm_obj = batch_f_list
 
+
     logprob_list = logprob_list.unsqueeze(2)
-    loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
-    hv_d_list = get_hv_d(loss_per_obj.detach().cpu().numpy())
+    # loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
+    # hv_d_list = get_hv_d(loss_per_obj.detach().cpu().numpy())
+    # hv_d_list = hv_d_list.to(device)
+    # hv_loss_per_obj = loss_per_obj*hv_d_list
+    hv_d_list = get_hv_d(A.transpose((1,0,2))).transpose(1,0)
     hv_d_list = hv_d_list.to(device)
-    hv_loss_per_obj = loss_per_obj*hv_d_list
+    A = torch.from_numpy(A).to(logprob_list.device)
+    hv_loss_per_obj = logprob_list*A*hv_d_list
     hv_loss_per_instance = hv_loss_per_obj.sum(dim=2)
     hv_loss_per_ray = hv_loss_per_instance.mean(dim=0)
     hv_loss = hv_loss_per_ray.sum()
-    loss_min, _ = hv_loss_per_obj.min(dim=1, keepdim=True)
-    loss_max, _ = hv_loss_per_obj.max(dim=1, keepdim=True)
-    hv_loss_per_obj_norm = (hv_loss_per_obj-loss_min)/loss_max
-    ray_list = ray_list.unsqueeze(0).expand_as(hv_loss_per_obj_norm)
-    cos_penalty = cosine_similarity(hv_loss_per_obj_norm, ray_list, dim=2) # *logprob_list.squeeze(-1)
+    # loss_min, _ = hv_loss_per_obj.min(dim=1, keepdim=True)
+    # loss_max, _ = hv_loss_per_obj.max(dim=1, keepdim=True)
+    norm_obj = batch_f_list
+    norm_obj = torch.from_numpy(norm_obj).to(logprob_list.device)
+    # hv_loss_per_obj_norm = (hv_loss_per_obj-loss_min)/loss_max
+    ray_list = ray_list.unsqueeze(0).expand_as(norm_obj)
+    cos_penalty = cosine_similarity(norm_obj, ray_list, dim=2)*logprob_list.squeeze(-1)
     cos_penalty_per_ray = cos_penalty.mean(dim=0)
     total_cos_penalty = cos_penalty_per_ray.sum()
     return hv_loss, total_cos_penalty
@@ -151,7 +161,7 @@ def solve_one_batch(agent, param_dict_list, batch, nondom_list):
 
 
 
-def initialize(param, phn, opt, tb_writer):
+def initialize(param, phn, opt, tb_writer, it):
     ray = np.asanyarray([[0.5,0.5]],dtype=float)
     ray = torch.from_numpy(ray).to(phn.device, dtype=torch.float32)
     param_dict = phn(ray)
@@ -164,7 +174,7 @@ def initialize(param, phn, opt, tb_writer):
     weights = torch.concatenate(weights, dim=0)
     loss = torch.norm(weights-param)
     opt.zero_grad(set_to_none=True)
-    tb_writer.add_scalar("Initialization loss", loss.cpu().item())
+    tb_writer.add_scalar("Initialization loss", loss.cpu().item(), it)
     loss.backward()
     opt.step()
     return loss.cpu().item()
@@ -197,7 +207,7 @@ def init_phn_output(agent, phn, tb_writer, max_step=1000):
     weights = torch.concatenate(weights, dim=0)
     opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     for i in range(max_step):
-        loss = initialize(weights,phn,opt_init,tb_writer)
+        loss = initialize(weights,phn,opt_init,tb_writer, i)
         if loss < 1e-4:
             break
 
