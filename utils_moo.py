@@ -53,7 +53,7 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
     loss_max, _ = hv_loss_per_obj.max(dim=1, keepdim=True)
     hv_loss_per_obj_norm = (hv_loss_per_obj-loss_min)/loss_max
     ray_list = ray_list.unsqueeze(0).expand_as(hv_loss_per_obj_norm)
-    cos_penalty = cosine_similarity(hv_loss_per_obj_norm, ray_list, dim=2)*logprob_list.squeeze(-1)
+    cos_penalty = cosine_similarity(hv_loss_per_obj_norm, ray_list, dim=2) # *logprob_list.squeeze(-1)
     cos_penalty_per_ray = cos_penalty.mean(dim=0)
     total_cos_penalty = cos_penalty_per_ray.sum()
     return hv_loss, total_cos_penalty
@@ -156,10 +156,10 @@ def initialize(param, phn, opt, tb_writer):
     ray = torch.from_numpy(ray).to(phn.device, dtype=torch.float32)
     param_dict = phn(ray)
     weights = []
-    weights += [(param_dict["pe_weight"]).ravel()] 
-    weights += [(param_dict["pf_weight"]).ravel()]
-    weights += [(param_dict["pcs_weight"]).ravel()] 
-    weights += [(param_dict["pns_weight"]).ravel()]
+    # weights += [(param_dict["pe_weight"]).ravel()] 
+    # weights += [(param_dict["pf_weight"]).ravel()]
+    # weights += [(param_dict["pcs_weight"]).ravel()] 
+    # weights += [(param_dict["pns_weight"]).ravel()]
     weights += [(param_dict["po_weight"]).ravel()]
     weights = torch.concatenate(weights, dim=0)
     loss = torch.norm(weights-param)
@@ -176,23 +176,23 @@ def init_phn_output(agent, phn, tb_writer, max_step=1000):
     pns_weight = None
     po_weight = None
     for name, param in agent.named_parameters():
-        if name == "project_embeddings.weight":
-            pe_weight = param.data.ravel()
-        if name == "project_fixed_context.weight":
-            pf_weight = param.data.ravel()
-        if name == "project_current_vehicle_state.weight":
-            pcs_weight = param.data.ravel()
-        if name == 'project_node_state.weight':
-            pns_weight = param.data.ravel()
+        # if name == "project_embeddings.weight":
+        #     pe_weight = param.data.ravel()
+        # if name == "project_fixed_context.weight":
+        #     pf_weight = param.data.ravel()
+        # if name == "project_current_vehicle_state.weight":
+        #     pcs_weight = param.data.ravel()
+        # if name == 'project_node_state.weight':
+        #     pns_weight = param.data.ravel()
         if name == "project_out.weight":
             po_weight = param.data.ravel()
         
         
     weights = []
-    weights += [pe_weight.detach().clone()]
-    weights += [pf_weight.detach().clone()]
-    weights += [pcs_weight.detach().clone()]
-    weights += [pns_weight.detach().clone()]
+    # weights += [pe_weight.detach().clone()]
+    # weights += [pf_weight.detach().clone()]
+    # weights += [pcs_weight.detach().clone()]
+    # weights += [pns_weight.detach().clone()]
     weights += [po_weight.detach().clone()]
     weights = torch.concatenate(weights, dim=0)
     opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)

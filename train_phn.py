@@ -151,7 +151,7 @@ def validate_with_test(agent, phn, test_batch, test_batch2, tb_writer, epoch):
     
 
 def run(args):
-    patience=30
+    patience=10
     not_improving_count = 0
     agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch = setup_phn(args)
     validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
