@@ -1,5 +1,5 @@
-import math
 import pathlib
+import random
 
 import numpy as np
 import torch
@@ -162,7 +162,8 @@ def solve_one_batch(agent, param_dict_list, batch, nondom_list):
 
 
 def initialize(param, phn, opt, tb_writer, it):
-    ray = np.asanyarray([[0.5,0.5]],dtype=float)
+    r = random.random()
+    ray = np.asanyarray([[r,1-r]],dtype=float)
     ray = torch.from_numpy(ray).to(phn.device, dtype=torch.float32)
     param_dict = phn(ray)
     weights = []
@@ -205,7 +206,7 @@ def init_phn_output(agent, phn, tb_writer, max_step=1000):
     # weights += [pns_weight.detach().clone()]
     weights += [po_weight.detach().clone()]
     weights = torch.concatenate(weights, dim=0)
-    opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
+    opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-5)
     for i in range(max_step):
         loss = initialize(weights,phn,opt_init,tb_writer, i)
         if loss < 1e-4:
