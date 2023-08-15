@@ -2,6 +2,7 @@ import pathlib
 import random
 import time
 
+import numba
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -81,4 +82,5 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
+    numba.set_num_threads(1)
     run(args)
