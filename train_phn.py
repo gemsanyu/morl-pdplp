@@ -16,7 +16,7 @@ from model.phn import PHN
 from policy.hv import Hypervolume
 from utils import prepare_args
 from utils_moo import save_phn, generate_params, get_ray_list, solve_one_batch, compute_loss
-from utils_moo import update_phn, init_phn_output, compute_spread_loss
+from utils_moo import update_phn, init_phn_output, compute_spread_loss, init_one_epoch
 from setup_phn import setup_phn
 
 LIGHT_BLUE = mcolors.CSS4_COLORS['lightblue']
@@ -28,16 +28,14 @@ def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos
     tb_writer.add_scalar("Cos Penalty Loss", cos_penalty_loss_list.mean(), epoch)
     
 def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
-    small_batch = args.batch_size
-    real_batch = args.batch_size
-    train_dataloader = DataLoader(train_dataset, batch_size=small_batch, shuffle=True, pin_memory=True, num_workers=2)
+
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
     ld = 10 if init_stage else args.ld 
     if training_nondom_list is None:
         training_nondom_list = [None for i in range(len(train_dataset))]
     cos_penalty_loss_list = []
     hv_loss_list = []
     spread_loss_list = []
-    num_batch = 0
     for _, batch in tqdm(enumerate(train_dataloader), desc=f'Training epoch {epoch}'):
         ray_list =  get_ray_list(args.num_ray, agent.device)
         # get solutions
@@ -56,10 +54,7 @@ def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_da
         if init_stage:
             final_loss = 0
         final_loss -= ld*cos_penalty_loss
-        final_loss.backward()
-        num_batch += small_batch
-        if num_batch % real_batch == 0:
-            update_phn(agent, phn, opt, final_loss)
+        update_phn(agent, phn, opt, final_loss)
         hv_loss_list += [hv_loss.detach().cpu().numpy()]
         spread_loss_list += [spread_loss.detach().cpu().numpy()]
         cos_penalty_loss_list += [cos_penalty_loss.detach().cpu().numpy()]
@@ -68,49 +63,7 @@ def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_da
     cos_penalty_loss_list = np.array(cos_penalty_loss_list)
     plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos_penalty_loss_list)
     return training_nondom_list  
-
-
-# def init_one_epoch(args, agent: Agent, phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
-#     small_batch = args.batch_size
-#     real_batch = args.batch_size
-#     train_dataloader = DataLoader(train_dataset, batch_size=small_batch, shuffle=True, pin_memory=True, num_workers=2)
-#     ld = 10 if init_stage else args.ld 
-#     if training_nondom_list is None:
-#         training_nondom_list = [None for i in range(len(train_dataset))]
-#     cos_penalty_loss_list = []
-#     hv_loss_list = []
-#     spread_loss_list = []
-#     num_batch = 0
-#     for _, batch in tqdm(enumerate(train_dataloader), desc=f'Training epoch {epoch}'):
-#         ray_list =  get_ray_list(args.num_ray, agent.device)
-#         # get solutions
-#         agent.train()
-#         param_dict_list = generate_params(phn, ray_list)
-#         logprob_list, batch_f_list, _, training_nondom_list = solve_one_batch(agent, param_dict_list, batch, training_nondom_list)
-#         # get baseline/critic
-#         agent.eval()
-#         with torch.no_grad():
-#             crit_param_dict_list = generate_params(critic_phn, ray_list)
-#             _, greedy_batch_f_list, _, training_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, training_nondom_list)
-#         idx_list = batch[0]
-#         hv_loss, cos_penalty_loss = compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, greedy_batch_f_list, ray_list)
-#         spread_loss = compute_spread_loss(logprob_list, training_nondom_list, idx_list, batch_f_list)
-#         final_loss = hv_loss - 0.01*spread_loss
-#         if init_stage:
-#             final_loss = 0
-#         final_loss -= ld*cos_penalty_loss
-#         final_loss.backward()
-#         num_batch += small_batch
-#         if num_batch % real_batch == 0:
-#             update_phn(agent, phn, opt, final_loss)
-#         hv_loss_list += [hv_loss.detach().cpu().numpy()]
-#         spread_loss_list += [spread_loss.detach().cpu().numpy()]
-#         cos_penalty_loss_list += [cos_penalty_loss.detach().cpu().numpy()]
-#     hv_loss_list = np.array(hv_loss_list)
-#     spread_loss_list = np.array(spread_loss_list)
-#     cos_penalty_loss_list = np.array(cos_penalty_loss_list)
-#     plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos_penalty_loss_list)
-#     return training_nondom_list  
+        
 
 
 @torch.no_grad()        
@@ -200,7 +153,9 @@ def run(args):
     agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch = setup_phn(args)
     validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
-    init_phn_output(agent, phn, tb_writer, max_step=1000)
+    # init_phn_output(agent, phn, tb_writer, max_step=1000)
+    opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
+    phn = init_one_epoch(args, agent, phn, opt_init,train_dataset)
     init_epoch = 1
     opt_directions = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     for epoch in range(last_epoch+1, args.max_epoch):

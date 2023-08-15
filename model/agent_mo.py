@@ -110,6 +110,61 @@ class Agent(torch.nn.Module):
         selected_nodes = op % num_nodes
         return selected_vecs, selected_nodes, logprob_list, entropy_list
 
+    def get_probs(self,
+                node_embeddings: torch.Tensor,
+                fixed_context: torch.Tensor,
+                prev_node_embeddings: torch.Tensor,
+                node_dynamic_features: torch.Tensor,
+                vehicle_dynamic_features: torch.Tensor,
+                glimpse_V_static: torch.Tensor,
+                glimpse_K_static: torch.Tensor,
+                logit_K_static: torch.Tensor,
+                feasibility_mask: torch.Tensor,
+                param_dict: Optional[Dict[str, torch.Tensor]]=None
+                ):
+        batch_size, num_nodes, _ = node_embeddings.shape
+        _, num_vehicles, _ = vehicle_dynamic_features.shape
+        n_heads, key_size = self.n_heads, self.key_size
+        current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
+        # if param_dict is not None:       
+        # projected_current_vehicle_state = F.linear(current_vehicle_state, param_dict["pcs_weight"])
+        # node_dynamic_embeddings = F.linear(node_dynamic_features,param_dict["pns_weight"])
+        # glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        # else:
+        projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
+        node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+        glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
+        glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
+        glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)
+        glimpse_V_dynamic = glimpse_V_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
+        glimpse_K_dynamic = glimpse_K_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
+        glimpse_K_dynamic = self._make_heads(glimpse_K_dynamic)
+        glimpse_K_dynamic = glimpse_K_dynamic.view((n_heads, batch_size, num_vehicles, num_nodes, -1))
+        
+        glimpse_V = glimpse_V_static + glimpse_V_dynamic
+        glimpse_K = glimpse_K_static + glimpse_K_dynamic
+        logit_K = logit_K_static + logit_K_dynamic
+        query = fixed_context + projected_current_vehicle_state
+        glimpse_Q = query.view(batch_size, num_vehicles, n_heads, 1, key_size)
+        glimpse_Q = glimpse_Q.permute(2,0,1,3,4).contiguous()
+        compatibility = glimpse_Q@glimpse_K.permute(0,1,2,4,3).contiguous() / math.sqrt(glimpse_Q.size(-1)) # glimpse_K => n_heads, batch_size, num_items, embed_dim
+        compatibility = compatibility + feasibility_mask.unsqueeze(0).unsqueeze(3).float().log()
+        
+        attention = torch.softmax(compatibility.view(n_heads,batch_size,num_vehicles*num_nodes),dim=-1).view_as(compatibility)
+        heads = attention@glimpse_V
+        concated_heads = heads.permute(1,2,3,0,4).contiguous()
+        concated_heads = concated_heads.view(batch_size, num_vehicles, 1, self.embed_dim)
+        if param_dict is not None:
+            final_Q = F.linear(concated_heads, param_dict["po_weight"])
+        else:
+            final_Q = self.project_out(concated_heads)
+        logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
+        logits = torch.tanh(logits) * self.tanh_clip
+        logits = logits.squeeze(2) + feasibility_mask.float().log()
+        logits = logits.view(batch_size, num_vehicles*num_nodes)
+        probs = torch.softmax(logits, dim=1)
+        return probs
+
    # @torch.jit.ignore
     # @profile
     def select(self, probs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
