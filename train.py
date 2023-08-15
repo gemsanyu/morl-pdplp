@@ -4,6 +4,7 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
+import numba
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -169,4 +170,5 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
+    numba.set_num_threads(4)
     run(args)
