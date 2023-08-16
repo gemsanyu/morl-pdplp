@@ -44,10 +44,29 @@ class BPDPLP(object):
     def read_instance(self):
         instance_path = pathlib.Path(".")/"dataset"/"test"/(self.instance_name+".txt")
         road_types_path = pathlib.Path(".")/"dataset"/"test"/(self.instance_name+".road_types")
-        instance = read_instance(instance_path)
-        self.num_nodes, self.planning_time, self.max_capacity, self.coords, self.demands, self.time_windows, self.service_durations, self.distance_matrix = instance
-        self.road_types = read_road_types(road_types_path, self.num_nodes)
-        
+        if os.path.isfile(instance_path.absolute()):
+            instance = read_instance(instance_path)
+            self.num_nodes, self.planning_time, self.max_capacity, self.coords, self.demands, self.time_windows, self.service_durations, self.distance_matrix = instance
+            self.road_types = read_road_types(road_types_path, self.num_nodes)
+        else:
+            # if the instance is npz
+            instance_path = pathlib.Path(".")/"dataset"/"test"/(self.instance_name+".npz")
+            data = np.load(instance_path.absolute())
+            self.num_nodes = data["num_nodes"]
+            self.coords = data["coords"]
+            self.norm_coords = data["norm_coords"]
+            self.demands = data["demands"]
+            self.norm_demands = data["norm_demands"]
+            self.time_windows = data["time_windows"]
+            self.norm_time_windows = data["norm_time_windows"]
+            self.service_durations = data["service_durations"]
+            self.norm_service_durations = data["norm_service_durations"]
+            self.distance_matrix = data["distance_matrix"]
+            self.norm_distance_matrix = data["norm_distance_matrix"]
+            self.road_types = data["road_types"]
+            self.planning_time = data["planning_time"]
+            self.max_capacity = data["max_capacity"]
+
         #normalize all
     def normalize(self):
         self.norm_demands = self.demands / self.max_capacity
