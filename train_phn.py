@@ -22,6 +22,8 @@ from setup_phn import setup_phn
 LIGHT_BLUE = mcolors.CSS4_COLORS['lightblue']
 DARK_BLUE = mcolors.CSS4_COLORS['darkblue']
 
+SMALL_BATCH_SIZE = 32
+
 def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos_penalty_loss_list):
     tb_writer.add_scalar("Training HV LOSS", hv_loss_list.mean(), epoch)
     tb_writer.add_scalar("Training Spread Loss", spread_loss_list.mean(), epoch)
@@ -29,10 +31,11 @@ def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos
     
 def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
 
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
+    train_dataloader = DataLoader(train_dataset, batch_size=SMALL_BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=2)
     ld = 10 if init_stage else args.ld 
     if training_nondom_list is None:
         training_nondom_list = [None for i in range(len(train_dataset))]
+    num_batch = 0
     cos_penalty_loss_list = []
     hv_loss_list = []
     spread_loss_list = []
@@ -54,7 +57,11 @@ def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_da
         if init_stage:
             final_loss = 0
         final_loss -= ld*cos_penalty_loss
-        update_phn(agent, phn, opt, final_loss)
+        final_loss.backward()
+        num_batch += SMALL_BATCH_SIZE
+        if num_batch == args.batch_size:
+            update_phn(agent, phn, opt, final_loss)
+            num_batch = 0
         hv_loss_list += [hv_loss.detach().cpu().numpy()]
         spread_loss_list += [spread_loss.detach().cpu().numpy()]
         cos_penalty_loss_list += [cos_penalty_loss.detach().cpu().numpy()]
@@ -69,7 +76,7 @@ def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_da
 @torch.no_grad()        
 def validate_one_epoch(args, agent, phn, critic_phn, validation_nondom_list, critic_solution_list, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
     agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=SMALL_BATCH_SIZE)
     if validation_nondom_list is None:
         validation_nondom_list = [None for _ in range(len(validation_dataset))]
     
@@ -81,7 +88,7 @@ def validate_one_epoch(args, agent, phn, critic_phn, validation_nondom_list, cri
             _, batch_f_list, _, validation_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, validation_nondom_list)
             critic_solution_list += [batch_f_list]
         critic_solution_list = np.concatenate(critic_solution_list, axis=0)
-        validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
+        validation_dataloader = DataLoader(validation_dataset, batch_size=SMALL_BATCH_SIZE)
         
     param_dict_list = generate_params(phn, ray_list)
     f_list = []
