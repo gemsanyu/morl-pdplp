@@ -15,14 +15,13 @@ from utils import encode, solve_decode_only, update, update_step_only
 from utils import save, prepare_args
 from setup import setup
 
-C=10000
+C=1
 ACTUAL_BATCH_SIZE = 128
 
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
     best_agent.eval()
     propagated_batch_size = 0
-    ACTUAL_BATCH_SIZE = 16
     train_dataloader = DataLoader(train_dataset, batch_size=ACTUAL_BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
     sum_advantage = 0
     sum_training_travel_time  = 0
@@ -50,9 +49,14 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
             greedy_solve_results = solve_decode_only(best_agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)    
             _, _, _, greedy_travel_time, greedy_num_node_not_visited, _, _ = greedy_solve_results
 
-        score = travel_time + C*num_node_not_visited
-        greedy_score = greedy_travel_time + C*greedy_num_node_not_visited
-        advantage_list = score-greedy_score
+        # score = travel_time + C*num_node_not_visited
+        # greedy_score = greedy_travel_time + C*greedy_num_node_not_visited
+        tv_adv = travel_time-greedy_travel_time
+        tv_adv = (tv_adv - tv_adv.min())/(tv_adv.std()+1e-8)
+        nn_adv = num_node_not_visited - greedy_num_node_not_visited
+        nn_adv = (nn_adv - nn_adv.min())/(nn_adv.std()+1e-8)
+        advantage_list = tv_adv + C*nn_adv
+        # advantage_list = score-greedy_score
         # advantage_list = (advantage_list - advantage_list.min())/(advantage_list.max()-advantage_list.min() + 1e-8)
         # advantage_list = (advantage_list - advantage_list.mean())/advantage_list.std()
         logprob_list = logprob_list.sum(dim=-1)
@@ -140,7 +144,7 @@ def validate_one_epoch(agent, validation_dataset, test_batch, best_validation_sc
     return is_improving, best_validation_score, best_agent
 
 def run(args):
-    max_patience = 30
+    max_patience = 10
     not_improving = 0
     agent, opt, best_agent_state_dict, best_validation_score, tb_writer, test_batch, last_epoch = setup(args)
     best_agent = copy.deepcopy(agent)
