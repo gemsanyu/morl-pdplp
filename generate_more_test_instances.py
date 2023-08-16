@@ -30,7 +30,7 @@ def generate(nr,nc,cd,pt,twl,mc,d,dl,graph_name,mode,idx):
                       distribution=d,
                       depot_location=dl,
                       graph_seed=graph_seed)
-    graph_acronym = "new2-"+graph_name[:3]
+    graph_acronym = "new1-"+graph_name[:3]
     instance_name = graph_acronym+"-n"+str(nr)+"-"+str(idx)
     data_dir = pathlib.Path(".")/"dataset"/mode
     data_dir.mkdir(parents=True,exist_ok=True)
