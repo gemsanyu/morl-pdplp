@@ -15,8 +15,8 @@ from utils import encode, solve_decode_only, update, update_step_only
 from utils import save, prepare_args
 from setup import setup
 
-C=1
-ACTUAL_BATCH_SIZE = 128
+C=100
+ACTUAL_BATCH_SIZE = 256
 
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
