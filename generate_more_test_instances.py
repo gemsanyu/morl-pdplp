@@ -18,11 +18,11 @@ so that from one evaluation to another,
 the independence is not violated.
 """
 
-def generate(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_name,mode,idx):
+def generate(nr,nc,cd,pt,twl,mc,d,dl,graph_name,mode,idx):
     # nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx = config
     graph_seed = read_graph(graph_name)
     instance = BPDPLP(num_requests=nr,
-                      num_vehicles=nv,
+                      num_vehicles=1,
                       num_cluster=nc,
                       cluster_delta=cd,
                       planning_time=pt,time_window_length=twl,
@@ -34,24 +34,55 @@ def generate(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_name,mode,idx):
     instance_name = graph_acronym+"-n"+str(nr)+"-"+str(idx)
     data_dir = pathlib.Path(".")/"dataset"/mode
     data_dir.mkdir(parents=True,exist_ok=True)
-    data_path = data_dir/(instance_name+".npz")
+    save_to_text(instance_name, instance, graph_name)
     
-    np.savez_compressed(data_path.absolute(), 
-                        coords=instance.coords,
-                        norm_coords=instance.coords,
-                        demands=instance.demands,
-                        norm_demands=instance.norm_demands,
-                        time_windows=instance.time_windows,
-                        norm_time_windows=instance.norm_time_windows,
-                        service_durations=instance.service_durations,
-                        norm_service_durations=instance.norm_service_durations,
-                        distance_matrix=instance.distance_matrix,
-                        norm_distance_matrix=instance.norm_distance_matrix,
-                        road_types=instance.road_types,
-                        max_capacity=instance.max_capacity,
-                        planning_time=instance.planning_time,
-                        num_nodes=instance.num_nodes)
-    
+def save_to_text(instance_name, instance:BPDPLP, graph_name):
+    data_dir = pathlib.Path(".")/"dataset"/"test"
+    data_dir.mkdir(parents=True,exist_ok=True)
+    instance_path = data_dir/(instance_name+".txt")
+    road_types_path = data_dir/(instance_name+".road_types")
+    with open(instance_path.absolute(), "w") as instance_file:
+        instance_file.write("NAME: "+instance_name+"\n")
+        instance_file.write("LOCATION: "+graph_name+"\n")
+        instance_file.write("COMMENT: GENERATED based on Sartori and Buriol (2019)\n")
+        instance_file.write("TYPE: PDPTW\n")
+        instance_file.write("SIZE: "+str(instance.num_nodes)+"\n")
+        instance_file.write("DISTRIBUTION: placeholder\n")
+        instance_file.write("DEPOT: placeholder\n")
+        instance_file.write("ROUTE-TIME: "+str(instance.planning_time)+"\n")
+        instance_file.write("TIME-WINDOW: "+str(instance.time_window_length)+"\n")
+        instance_file.write("CAPACITY: "+str(instance.max_capacity)+"\n")
+        instance_file.write("NODES\n")
+        for i in range(instance.num_nodes):
+            line = str(i) + " "
+            line += f'{instance.coords[i,0]:.8f} {instance.coords[i,1]:.8f}' + " "
+            line += str(instance.demands[i]) + " "
+            line += str(instance.time_windows[i,0]) + " " + str(instance.time_windows[i,1]) + " "
+            line += str(instance.demands[i]) + " "
+            if i <= instance.num_requests:
+                line += "0 " + str(i+instance.num_requests) + "\n"
+            else:
+                line += str(i-instance.num_requests) + " 0\n"
+            instance_file.write(line)
+        instance_file.write("EDGES\n")       
+        for i in range(instance.num_nodes):
+            line = ""
+            for j in range(instance.num_nodes):
+                line += str(instance.distance_matrix[i,j]) + " "
+            line += "\n"
+            instance_file.write(line)
+        instance_file.write("EOF")
+
+    """
+        saving road types
+    """
+    with open(road_types_path.absolute(), "w") as road_types_file:
+        for i in range(instance.num_nodes):
+            line = ""
+            for j in range(instance.num_nodes):
+                line += str(instance.road_types[i,j])+" "
+            road_types_file.write(line+"\n")
+
 
 def run():
     num_samples_per_config = 6
@@ -68,16 +99,15 @@ def run():
     config_list = []
     for idx in range(num_samples_per_config):
         for nr in num_requests_list:
-            for nv in num_vehicles_list:
-                for graph in graph_list:
-                    nc = num_clusters_list[random.randint(0, len(num_clusters_list)-1)]
-                    pt = planning_time_list[random.randint(0, len(planning_time_list)-1)]
-                    twl = time_window_length_list[random.randint(0, len(time_window_length_list)-1)]
-                    cd = cluster_delta_list[random.randint(0, len(cluster_delta_list)-1)]
-                    mc = max_capacity_list[random.randint(0, len(max_capacity_list)-1)]
-                    d = distribution_list[random.randint(0, len(distribution_list)-1)]
-                    dl = depot_location_list[random.randint(0, len(depot_location_list)-1)]
-                    config_list += [(nr,nv,nc,cd,pt,twl,mc,d,dl,graph,"test",idx)]
+            for graph in graph_list:
+                nc = num_clusters_list[random.randint(0, len(num_clusters_list)-1)]
+                pt = planning_time_list[random.randint(0, len(planning_time_list)-1)]
+                twl = time_window_length_list[random.randint(0, len(time_window_length_list)-1)]
+                cd = cluster_delta_list[random.randint(0, len(cluster_delta_list)-1)]
+                mc = max_capacity_list[random.randint(0, len(max_capacity_list)-1)]
+                d = distribution_list[random.randint(0, len(distribution_list)-1)]
+                dl = depot_location_list[random.randint(0, len(depot_location_list)-1)]
+                config_list += [(nr,nc,cd,pt,twl,mc,d,dl,graph,"test",idx+1)]
     with Pool(processes=12) as pool:
         L = pool.starmap(generate, config_list)
 
