@@ -16,7 +16,7 @@ def prepare_args():
     args.device = torch.device(args.device)
     return args
 
-def instance_to_batch(instance:BPDPLP)->BPDPLP_Env:
+def instance_to_batch(instance:BPDPLP):
     coords = torch.from_numpy(instance.coords).unsqueeze(0)
     norm_coords = torch.from_numpy(instance.norm_coords).unsqueeze(0)
     demands = torch.from_numpy(instance.demands).unsqueeze(0)
@@ -28,9 +28,9 @@ def instance_to_batch(instance:BPDPLP)->BPDPLP_Env:
     distance_matrix = torch.from_numpy(instance.distance_matrix).unsqueeze(0)
     norm_distance_matrix = torch.from_numpy(instance.norm_distance_matrix).unsqueeze(0)
     road_types = torch.from_numpy(instance.road_types).unsqueeze(0)
-    max_capacity = torch.tensor([instance.max_capacity])
+    max_capacity = torch.tensor([float(instance.max_capacity)])
     num_vehicles = torch.tensor([instance.num_vehicles])
-    planning_time = torch.tensor([instance.planning_time])
+    planning_time = torch.tensor([float(instance.planning_time)])
     # env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time , time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
     # return env
     return 0, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
