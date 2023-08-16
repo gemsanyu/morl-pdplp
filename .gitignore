@@ -4,7 +4,6 @@ dataset/validation*
 dataset/testing_batch*
 *__pycache__*
 *.ipynb_checkpoints*
-*.npz
 *.html
 runs*
 *.npy
