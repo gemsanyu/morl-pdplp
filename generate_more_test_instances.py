@@ -31,7 +31,7 @@ def generate(nr,nc,cd,pt,twl,mc,d,dl,graph_name,mode,idx):
                       depot_location=dl,
                       graph_seed=graph_seed)
     graph_acronym = "new1-"+graph_name[:3]
-    instance_name = graph_acronym+"-n"+str(nr)+"-"+str(idx)
+    instance_name = graph_acronym+"-n"+str(nr*2)+"-"+str(idx)
     data_dir = pathlib.Path(".")/"dataset"/mode
     data_dir.mkdir(parents=True,exist_ok=True)
     save_to_text(instance_name, instance, graph_name)
@@ -86,7 +86,7 @@ def save_to_text(instance_name, instance:BPDPLP, graph_name):
 
 def run():
     num_samples_per_config = 6
-    num_requests_list = [100,200,400]
+    num_requests_list = [50,100,200]
     num_vehicles_list = [1,3,5,10]
     num_clusters_list = [3,4,5,6,7,8]
     cluster_delta_list = [1,1.2,1.6]
