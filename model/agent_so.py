@@ -71,10 +71,20 @@ class Agent(torch.nn.Module):
         self.project_fixed_context = Linear(embed_dim, embed_dim, bias=False)
         current_state_dim = embed_dim + num_vehicle_dynamic_features
         self.project_current_vehicle_state = Linear(current_state_dim, embed_dim, bias=False)
-        self.project_node_state = Linear(num_node_dynamic_features, 3*embed_dim, bias=False)
+        self.project_node_state1 = Linear(num_node_dynamic_features-1, 3*embed_dim, bias=False)
+        self.project_node_state2 = Linear(3*embed_dim+1, 3*embed_dim, bias=False)
+        
         self.project_out = Linear(embed_dim, embed_dim, bias=False)
         self.to(self.device)
-        
+    
+    def get_node_dynamic_embeddings(self, node_dynamic_features: torch.Tensor):
+        is_to_be_delivered_flag = node_dynamic_features[:,:,:,-1].unsqueeze(-1)
+        node_dynamic_features = node_dynamic_features[:,:,:,:-1]
+        x = self.project_node_state1(node_dynamic_features)
+        x_ = torch.concatenate([x, is_to_be_delivered_flag], dim=-1)
+        x_ = self.project_node_state2(x_)
+        node_dynamic_embeddings = x+x_
+        return node_dynamic_embeddings
     # @torch.jit.script_method
     
     
@@ -99,7 +109,7 @@ class Agent(torch.nn.Module):
         n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
         projected_current_vehicle_state = self.project_current_vehicle_state(current_vehicle_state)
-        node_dynamic_embeddings = self.project_node_state(node_dynamic_features)
+        node_dynamic_embeddings = self.get_node_dynamic_embeddings(node_dynamic_features)
         glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = make_heads(glimpse_V_dynamic, n_heads, key_size)

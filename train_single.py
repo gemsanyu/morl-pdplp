@@ -15,14 +15,12 @@ from utils import encode, solve_decode_only, update, update_step_only
 from utils import save, prepare_args
 from setup import setup
 
-C=100
-ACTUAL_BATCH_SIZE = 32
+C=1000
 
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
     best_agent.eval()
-    propagated_batch_size = 0
-    train_dataloader = DataLoader(train_dataset, batch_size=ACTUAL_BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
     sum_advantage = 0
     sum_training_travel_time  = 0
     sum_node_node_not_visited = 0
@@ -36,50 +34,32 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
         encode_results = encode(agent, static_features)
         node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
-        
         tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, reward_list, logprob_list, sum_entropies = solve_results
         
         # computing critic
-        # with torch.no_grad():
-        #     env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
-        #     static_features,_,_,_ = env.begin()
-        #     static_features = torch.from_numpy(static_features).to(agent.device)
-        #     encode_results = encode(best_agent, static_features)
-        #     node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
-        #     greedy_solve_results = solve_decode_only(best_agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)    
-        #     _, _, _, greedy_travel_time, greedy_num_node_not_visited, _, _ = greedy_solve_results
+        with torch.no_grad():
+            env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
+            static_features,_,_,_ = env.begin()
+            static_features = torch.from_numpy(static_features).to(agent.device)
+            encode_results = encode(best_agent, static_features)
+            node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
+            greedy_solve_results = solve_decode_only(best_agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)    
+            _, _, _, greedy_travel_time, greedy_num_node_not_visited, _, _, _ = greedy_solve_results
 
-        # score = travel_time + C*num_node_not_visited
-        # greedy_score = greedy_travel_time + C*greedy_num_node_not_visited
+        score = travel_time + C*num_node_not_visited
+        greedy_score = greedy_travel_time + C*greedy_num_node_not_visited
         # tv_adv = travel_time-greedy_travel_time
         # tv_adv = (tv_adv - tv_adv.min())/(tv_adv.std()+1e-8)
         # nn_adv = num_node_not_visited - greedy_num_node_not_visited
         # nn_adv = (nn_adv - nn_adv.min())/(nn_adv.std()+1e-8)
         # advantage_list = tv_adv + C*nn_adv
-        # advantage_list = score-greedy_score
+        advantage_list = score-greedy_score
         # advantage_list = (advantage_list - advantage_list.min())/(advantage_list.max()-advantage_list.min() + 1e-8)
-        # advantage_list = (advantage_list - advantage_list.mean())/advantage_list.std()
-        # logprob_list = logprob_list.sum(dim=-1)
-        # loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
-        # loss = loss.mean() - 0.05*sum_entropies.mean()
-        """
-            new loss function
-        """
-        reward_list = np.flip(reward_list, axis=1)
-        reward_list = np.cumsum(reward_list, axis=1)
-        reward_list = np.flip(reward_list, axis=1)
-        advantage_list = (reward_list - reward_list.mean(axis=1, keepdims=True))/reward_list.std(axis=1, keepdims=True)
-        # advantage_list = advantage_list.sum(axis=-1)
-        advantage_list = advantage_list[:,:,0] + advantage_list[:,:,1]
-        advantage_list = torch.from_numpy(advantage_list).to(agent.device)
-        loss = logprob_list * advantage_list
-        loss = loss.mean()
-        loss.backward()
-        propagated_batch_size += ACTUAL_BATCH_SIZE
-        # update(agent, opt,     loss, args.max_grad_norm)
-        if propagated_batch_size == args.batch_size:
-            update_step_only(agent, opt, args.max_grad_norm)
-            propagated_batch_size = 0
+        advantage_list = (advantage_list - advantage_list.mean())/advantage_list.std()
+        logprob_list = logprob_list.sum(dim=-1)
+        loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
+        loss = loss.mean() - 0.05*sum_entropies.mean()
+        update(agent, opt, loss, args.max_grad_norm)
 
         sum_advantage += advantage_list.sum()
         sum_training_travel_time += travel_time.sum()
@@ -95,7 +75,7 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
 @torch.no_grad()
 def validate_one_epoch(agent, validation_dataset, test_batch, best_validation_score, best_agent, tb_writer, epoch):
     agent.eval()
-    validation_dataloader = DataLoader(validation_dataset, batch_size=ACTUAL_BATCH_SIZE, num_workers=2, pin_memory=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size, num_workers=2, pin_memory=True)
     validation_num_node_not_visited_list = []
     validation_travel_time_list = []
 
