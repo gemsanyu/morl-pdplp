@@ -30,7 +30,7 @@ def generate(nr,nc,cd,pt,twl,mc,d,dl,graph_name,mode,idx):
                       distribution=d,
                       depot_location=dl,
                       graph_seed=graph_seed)
-    graph_acronym = "new1-"+graph_name[:3]
+    graph_acronym = "new2-"+graph_name[:3]
     instance_name = graph_acronym+"-n"+str(nr*2)+"-"+str(idx)
     data_dir = pathlib.Path(".")/"dataset"/mode
     data_dir.mkdir(parents=True,exist_ok=True)
@@ -56,10 +56,12 @@ def save_to_text(instance_name, instance:BPDPLP, graph_name):
         for i in range(instance.num_nodes):
             line = str(i) + " "
             line += f'{instance.coords[i,0]:.8f} {instance.coords[i,1]:.8f}' + " "
-            line += str(instance.demands[i]) + " "
-            line += str(instance.time_windows[i,0]) + " " + str(instance.time_windows[i,1]) + " "
-            line += str(instance.demands[i]) + " "
-            if i <= instance.num_requests:
+            line += str(int(instance.demands[i])) + " "
+            line += str(int(instance.time_windows[i,0])) + " " + str(int(instance.time_windows[i,1])) + " "
+            line += str(int(instance.demands[i])) + " "
+            if i == 0:
+                line += "0 0\n"
+            elif i <= instance.num_requests:
                 line += "0 " + str(i+instance.num_requests) + "\n"
             else:
                 line += str(i-instance.num_requests) + " 0\n"
@@ -68,7 +70,7 @@ def save_to_text(instance_name, instance:BPDPLP, graph_name):
         for i in range(instance.num_nodes):
             line = ""
             for j in range(instance.num_nodes):
-                line += str(instance.distance_matrix[i,j]) + " "
+                line += str(int(instance.distance_matrix[i,j])) + " "
             line += "\n"
             instance_file.write(line)
         instance_file.write("EOF")
