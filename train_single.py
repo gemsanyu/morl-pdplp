@@ -16,7 +16,7 @@ from utils import save, prepare_args
 from setup import setup
 
 C=100
-ACTUAL_BATCH_SIZE = 256
+ACTUAL_BATCH_SIZE = 32
 
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
@@ -37,34 +37,46 @@ def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoc
         node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
         
-        tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, logprob_list, sum_entropies = solve_results
+        tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, reward_list, logprob_list, sum_entropies = solve_results
         
         # computing critic
-        with torch.no_grad():
-            env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
-            static_features,_,_,_ = env.begin()
-            static_features = torch.from_numpy(static_features).to(agent.device)
-            encode_results = encode(best_agent, static_features)
-            node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
-            greedy_solve_results = solve_decode_only(best_agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)    
-            _, _, _, greedy_travel_time, greedy_num_node_not_visited, _, _ = greedy_solve_results
+        # with torch.no_grad():
+        #     env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
+        #     static_features,_,_,_ = env.begin()
+        #     static_features = torch.from_numpy(static_features).to(agent.device)
+        #     encode_results = encode(best_agent, static_features)
+        #     node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
+        #     greedy_solve_results = solve_decode_only(best_agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)    
+        #     _, _, _, greedy_travel_time, greedy_num_node_not_visited, _, _ = greedy_solve_results
 
         # score = travel_time + C*num_node_not_visited
         # greedy_score = greedy_travel_time + C*greedy_num_node_not_visited
-        tv_adv = travel_time-greedy_travel_time
-        tv_adv = (tv_adv - tv_adv.min())/(tv_adv.std()+1e-8)
-        nn_adv = num_node_not_visited - greedy_num_node_not_visited
-        nn_adv = (nn_adv - nn_adv.min())/(nn_adv.std()+1e-8)
-        advantage_list = tv_adv + C*nn_adv
+        # tv_adv = travel_time-greedy_travel_time
+        # tv_adv = (tv_adv - tv_adv.min())/(tv_adv.std()+1e-8)
+        # nn_adv = num_node_not_visited - greedy_num_node_not_visited
+        # nn_adv = (nn_adv - nn_adv.min())/(nn_adv.std()+1e-8)
+        # advantage_list = tv_adv + C*nn_adv
         # advantage_list = score-greedy_score
         # advantage_list = (advantage_list - advantage_list.min())/(advantage_list.max()-advantage_list.min() + 1e-8)
         # advantage_list = (advantage_list - advantage_list.mean())/advantage_list.std()
-        logprob_list = logprob_list.sum(dim=-1)
-        loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
-        loss = loss.mean() - 0.05*sum_entropies.mean()
+        # logprob_list = logprob_list.sum(dim=-1)
+        # loss = logprob_list*torch.from_numpy(advantage_list).to(agent.device)
+        # loss = loss.mean() - 0.05*sum_entropies.mean()
+        """
+            new loss function
+        """
+        reward_list = np.flip(reward_list, axis=1)
+        reward_list = np.cumsum(reward_list, axis=1)
+        reward_list = np.flip(reward_list, axis=1)
+        advantage_list = (reward_list - reward_list.mean(axis=1, keepdims=True))/reward_list.std(axis=1, keepdims=True)
+        # advantage_list = advantage_list.sum(axis=-1)
+        advantage_list = advantage_list[:,:,0] + advantage_list[:,:,1]
+        advantage_list = torch.from_numpy(advantage_list).to(agent.device)
+        loss = logprob_list * advantage_list
+        loss = loss.mean()
         loss.backward()
         propagated_batch_size += ACTUAL_BATCH_SIZE
-        # update(agent, opt, loss, args.max_grad_norm)
+        # update(agent, opt,     loss, args.max_grad_norm)
         if propagated_batch_size == args.batch_size:
             update_step_only(agent, opt, args.max_grad_norm)
             propagated_batch_size = 0
@@ -96,7 +108,7 @@ def validate_one_epoch(agent, validation_dataset, test_batch, best_validation_sc
         node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
         
-        tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, logprob_list, sum_entropies = solve_results
+        tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, reward_list, logprob_list, sum_entropies = solve_results
         # advantage_list = (reward_list - reward_list.mean(axis=1, keepdims=True))/reward_list.std(axis=1, keepdims=True)
         # advantage_list = np.sum(advantage_list, axis=-1)
         
@@ -127,7 +139,7 @@ def validate_one_epoch(agent, validation_dataset, test_batch, best_validation_sc
     node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
     solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
     
-    _, _, _, test_travel_time, test_num_node_not_visited, _, _ = solve_results
+    _, _, _, test_travel_time, test_num_node_not_visited, _, _, _ = solve_results
     tb_writer.add_scalar("Test Travel Time", test_travel_time.mean(), epoch)
     tb_writer.add_scalar("Test Unserved Count", test_num_node_not_visited.mean(), epoch)
 

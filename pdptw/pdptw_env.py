@@ -200,8 +200,8 @@ class PDPTW_Env(object):
         #just send the vehicle to the node
         # selected_nodes = np.asanyarray(selected_nodes)
         # selected_vecs = np.asanyarray(selected_vecs)
-        self.service_node_by_vec(batch_idx, selected_vecs, selected_nodes)
-        return self.get_state()
+        rewards = self.service_node_by_vec(batch_idx, selected_vecs, selected_nodes)
+        return *self.get_state(), rewards
 
     """
         needs to be updated: current location, current time, current load, request assignment
@@ -210,13 +210,18 @@ class PDPTW_Env(object):
     """
     # @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
+        active_batch_size = len(batch_idx)
+        rewards = np.zeros((active_batch_size, 2), dtype=np.float32)
         # assert (len(batch_idx) == self.batch_size)
         travel_time_list = self.get_travel_time()
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
+        rewards[:, 0] = travel_time_vecs
         self.is_node_visited[batch_idx, selected_nodes] = True
         # isnp -> is_selected_node_pickup
         # assign the request to the vehicles
         isnp = selected_nodes <= self.num_requests
+        rewards[isnp, 1] = 101
+        rewards[np.logical_not(isnp),1] = -102
         # not_served = self.request_assignment[batch_idx[isnp], selected_nodes[isnp]-1] == -1
         # assert np.all(not_served)
         self.request_assignment[batch_idx[isnp], selected_nodes[isnp]-1] = selected_vecs[isnp]
@@ -243,7 +248,8 @@ class PDPTW_Env(object):
         self.arrived_time[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = self.current_time[batch_idx, selected_vecs]
         self.current_location_idx[batch_idx, selected_vecs] = selected_nodes
         self.current_time[batch_idx, selected_vecs] += self.service_durations[batch_idx, selected_nodes]
-        
+        return rewards
+
     def get_state(self):
         return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 
 

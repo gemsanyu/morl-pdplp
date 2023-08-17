@@ -95,6 +95,7 @@ def solve_decode_only(agent, env:PDPTW_Env, node_embeddings, fixed_context, glim
     logits_K_static = logits_K_static.unsqueeze(1).expand(-1,max_num_vehicles,-1,-1)
     fixed_context = fixed_context.unsqueeze(1).expand(-1,max_num_vehicles,-1)
     logprob_list = torch.zeros((batch_size, 2*env.num_requests+2), device=agent.device)
+    reward_list = np.zeros((batch_size, 2*env.num_requests+2,2), dtype=np.float32)
     # this time we have to use active batch_idx
     is_still_feasible = np.any(feasibility_mask.cpu().numpy().reshape(batch_size, -1), axis=-1)
     active_batch_idx = batch_idx[is_still_feasible]
@@ -127,8 +128,10 @@ def solve_decode_only(agent, env:PDPTW_Env, node_embeddings, fixed_context, glim
         selected_vecs, selected_nodes, logprobs, entropy_list = forward_results
         selected_vecs = selected_vecs.cpu().numpy()
         selected_nodes = selected_nodes.cpu().numpy()
-        vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.act(active_batch_idx, selected_vecs, selected_nodes)
+        vehicle_dynamic_features, node_dynamic_features, feasibility_mask, rewards = env.act(active_batch_idx, selected_vecs, selected_nodes)
+        
         # sum_logprobs += logprobs
+        reward_list[active_batch_idx, it, :] = rewards
         logprob_list[active_batch_idx, it] = logprobs
         sum_entropies[active_batch_idx] += entropy_list
         # vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
@@ -139,7 +142,9 @@ def solve_decode_only(agent, env:PDPTW_Env, node_embeddings, fixed_context, glim
         feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
         it += 1
     tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited = env.finish()
-    return tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, logprob_list, sum_entropies
+    last_it = (torch.argmax(logprob_list, dim=-1)-1).cpu().numpy()
+    reward_list[batch_idx, last_it, 1] += (num_node_not_visited/2)*101
+    return tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, reward_list, logprob_list, sum_entropies
 
 def update(agent, opt, loss, max_grad_norm):
         loss.backward()
