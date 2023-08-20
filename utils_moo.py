@@ -1,14 +1,14 @@
-import math
 import pathlib
+import random
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.nn.functional import cosine_similarity
+from torch.nn import KLDivLoss
 from tqdm import tqdm
 
-from policy.policy import Policy
-from bpdplp.bpdplp_env import BPDPLP_Env
+from pdptw.pdptw_env import PDPTW_Env
 from policy.non_dominated_sorting import fast_non_dominated_sort
 from utils import encode, solve_decode_only
 from solver.hv_maximization import HvMaximization
@@ -34,26 +34,36 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
         utopia += [np.min(nondom_sols, axis=0, keepdims=True)[np.newaxis,:]]
     nadir = np.concatenate(nadir, axis=0)
     utopia = np.concatenate(utopia, axis=0)
-    A = batch_f_list-greedy_batch_f_list
+    # A = batch_f_list-greedy_batch_f_list
     # A = batch_f_list
     denom = (nadir-utopia)
     denom[denom==0] = 1
-    norm_obj = (A-utopia)/denom
+    # norm_obj = (A-utopia)/denom
+    batch_f_list = (batch_f_list-utopia)/denom
+    greedy_batch_f_list = (greedy_batch_f_list-utopia)/denom
+    A = batch_f_list-greedy_batch_f_list
     # norm_obj = batch_f_list
 
+
     logprob_list = logprob_list.unsqueeze(2)
-    loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
-    hv_d_list = get_hv_d(loss_per_obj.detach().cpu().numpy())
+    # loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
+    # hv_d_list = get_hv_d(loss_per_obj.detach().cpu().numpy())
+    # hv_d_list = hv_d_list.to(device)
+    # hv_loss_per_obj = loss_per_obj*hv_d_list
+    hv_d_list = get_hv_d(A.transpose((1,0,2))).transpose(1,0)
     hv_d_list = hv_d_list.to(device)
-    hv_loss_per_obj = loss_per_obj*hv_d_list
+    A = torch.from_numpy(A).to(logprob_list.device)
+    hv_loss_per_obj = logprob_list*A*hv_d_list
     hv_loss_per_instance = hv_loss_per_obj.sum(dim=2)
     hv_loss_per_ray = hv_loss_per_instance.mean(dim=0)
     hv_loss = hv_loss_per_ray.sum()
-    loss_min, _ = hv_loss_per_obj.min(dim=1, keepdim=True)
-    loss_max, _ = hv_loss_per_obj.max(dim=1, keepdim=True)
-    hv_loss_per_obj_norm = (hv_loss_per_obj-loss_min)/loss_max
-    ray_list = ray_list.unsqueeze(0).expand_as(hv_loss_per_obj_norm)
-    cos_penalty = cosine_similarity(hv_loss_per_obj_norm, ray_list, dim=2)*logprob_list.squeeze(-1)
+    # loss_min, _ = hv_loss_per_obj.min(dim=1, keepdim=True)
+    # loss_max, _ = hv_loss_per_obj.max(dim=1, keepdim=True)
+    norm_obj = batch_f_list
+    norm_obj = torch.from_numpy(norm_obj).to(logprob_list.device)
+    # hv_loss_per_obj_norm = (hv_loss_per_obj-loss_min)/loss_max
+    ray_list = ray_list.unsqueeze(0).expand_as(norm_obj)
+    cos_penalty = cosine_similarity(norm_obj, ray_list, dim=2)*logprob_list.squeeze(-1)
     cos_penalty_per_ray = cos_penalty.mean(dim=0)
     total_cos_penalty = cos_penalty_per_ray.sum()
     return hv_loss, total_cos_penalty
@@ -81,6 +91,7 @@ def compute_spread_loss(logprobs, training_nondom_list, idx_list, f_list):
     return spread_loss
 
 def update_phn(agent, phn, opt, final_loss):
+    final_loss.backward()
     torch.nn.utils.clip_grad_norm_(phn.parameters(), max_norm=0.5)
     opt.step()
     agent.zero_grad(set_to_none=True)
@@ -114,8 +125,8 @@ def generate_params(phn, ray_list):
 def solve_one_batch(agent, param_dict_list, batch, nondom_list):
     idx_list = batch[0]
     batch = batch[1:]
-    num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
-    env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
+    num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix = batch
+    env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
     static_features,_,_,_ = env.begin()
     static_features = torch.from_numpy(static_features).to(agent.device)
     encode_results = encode(agent, static_features)
@@ -149,10 +160,116 @@ def solve_one_batch(agent, param_dict_list, batch, nondom_list):
 
     return logprob_list, batch_f_list, reward_list, nondom_list
 
+def init_one_epoch(args, agent, phn, opt, train_dataset):
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
+    for _, batch in tqdm(enumerate(train_dataloader), desc="Init epoch"):
+        ray = np.asanyarray([0.5, 0.5], dtype=np.float32)
+        ray = torch.from_numpy(ray).to(agent.device)
+        param_dict = phn(ray)
+        idx_list = batch[0]
+        batch = batch[1:]
+        num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix = batch
+        env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
+        static_features,_,_,_ = env.begin()
+        static_features = torch.from_numpy(static_features).to(agent.device)
+        encode_results = encode(agent, static_features)
+        node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
+        batch_size, num_nodes, embed_dim = node_embeddings.shape
+        batch_idx = np.arange(batch_size)
+        
+        static_features, vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.begin()
+        vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device, dtype=torch.float32)
+        node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device, dtype=torch.float32)
+        feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
+        num_vehicles = env.num_vehicles
+        max_num_vehicles = int(np.max(num_vehicles))
+        probs_list = []
+        probs_phn_list = []
+        
+        glimpse_V_static = glimpse_V_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
+        glimpse_K_static = glimpse_K_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
+        logits_K_static = logits_K_static.unsqueeze(1).expand(-1,max_num_vehicles,-1,-1)
+        fixed_context = fixed_context.unsqueeze(1).expand(-1,max_num_vehicles,-1)
+        is_still_feasible = np.any(feasibility_mask.cpu().numpy().reshape(batch_size, -1), axis=-1)
+        active_batch_idx = batch_idx[is_still_feasible]
+    
+        while np.any(is_still_feasible):
+            active_batch_size = len(active_batch_idx)
+            active_batch_vec_idx = env.batch_vec_idx_not_flat[active_batch_idx]
+            active_current_location_idx = env.current_location_idx[active_batch_idx]
+            prev_node_embeddings = node_embeddings[active_batch_vec_idx.ravel(), active_current_location_idx.ravel(), :]
+            prev_node_embeddings = prev_node_embeddings.view((len(active_batch_idx),max_num_vehicles,-1))
+            active_node_embeddings = node_embeddings[active_batch_idx]
+            active_fixed_context = fixed_context[active_batch_idx]
+            active_node_dynamic_features = node_dynamic_features[active_batch_idx]
+            active_vehicle_dynamic_features = vehicle_dynamic_features[active_batch_idx]
+            active_glimpse_V_static = glimpse_V_static[:,active_batch_idx,:,:]
+            active_glimpse_K_static = glimpse_K_static[:,active_batch_idx,:,:]
+            active_logits_K_static = logits_K_static[active_batch_idx]
+            active_feasibility_mask = feasibility_mask[active_batch_idx]
+            probs_phn = agent.get_probs(active_node_embeddings,
+                                        active_fixed_context,
+                                        prev_node_embeddings,
+                                        active_node_dynamic_features,
+                                        active_vehicle_dynamic_features,
+                                        active_glimpse_V_static,
+                                        active_glimpse_K_static,
+                                        active_logits_K_static,
+                                        active_feasibility_mask,
+                                        param_dict=param_dict)
+            batch_diff = batch_size - active_batch_size
+            probs_phn = torch.nn.functional.pad(probs_phn, (0,0,0,batch_diff), "constant", 0)
+            probs_phn_list += [probs_phn]
+            with torch.no_grad():
+                probs = agent.get_probs(active_node_embeddings,
+                                        active_fixed_context,
+                                        prev_node_embeddings,
+                                        active_node_dynamic_features,
+                                        active_vehicle_dynamic_features,
+                                        active_glimpse_V_static,
+                                        active_glimpse_K_static,
+                                        active_logits_K_static,
+                                        active_feasibility_mask)
+                
+                probs = torch.nn.functional.pad(probs, (0,0,0,batch_diff), "constant", 0)
+                probs_list += [probs]
+                forward_results = agent.forward(active_node_embeddings,
+                                        active_fixed_context,
+                                        prev_node_embeddings,
+                                        active_node_dynamic_features,
+                                        active_vehicle_dynamic_features,
+                                        active_glimpse_V_static,
+                                        active_glimpse_K_static,
+                                        active_logits_K_static,
+                                        active_feasibility_mask,
+                                        param_dict=param_dict)
+            selected_vecs, selected_nodes, logprobs, entropy_list = forward_results
+            selected_vecs = selected_vecs.cpu().numpy()
+            selected_nodes = selected_nodes.cpu().numpy()
+            vehicle_dynamic_features, node_dynamic_features, feasibility_mask, reward = env.act(active_batch_idx, selected_vecs, selected_nodes)
+            
+            # sum_logprobs += logprobs
+            # vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
+            vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device, dtype=torch.float32)
+            node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device, dtype=torch.float32)
+            is_still_feasible = np.any(feasibility_mask.reshape(batch_size, -1), axis=-1)
+            active_batch_idx = batch_idx[is_still_feasible]
+            feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
+        kl_loss = KLDivLoss(reduction='batchmean',log_target=True)
+        probs_list = torch.concatenate(probs_list, dim=0).log()
+        probs_phn_list = torch.concatenate(probs_phn_list, dim=0).log()
+        loss = kl_loss(probs_phn_list, probs_list)
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+        agent.zero_grad()
+        print("HELLO")
+    return phn
 
 
-def initialize(param, phn, opt, tb_writer):
-    ray = np.asanyarray([[0.5,0.5]],dtype=float)
+def initialize(param, phn, opt, tb_writer, it):
+    r = random.random()
+    ray = np.asanyarray([[r,1-r]],dtype=float)
     ray = torch.from_numpy(ray).to(phn.device, dtype=torch.float32)
     param_dict = phn(ray)
     weights = []
@@ -164,16 +281,16 @@ def initialize(param, phn, opt, tb_writer):
     weights = torch.concatenate(weights, dim=0)
     loss = torch.norm(weights-param)
     opt.zero_grad(set_to_none=True)
-    tb_writer.add_scalar("Initialization loss", loss.cpu().item())
+    tb_writer.add_scalar("Initialization loss", loss.cpu().item(), it)
     loss.backward()
     opt.step()
     return loss.cpu().item()
 
 def init_phn_output(agent, phn, tb_writer, max_step=1000):
-    # pe_weight = None
-    # pf_weight = None
-    # pcs_weight = None
-    # pns_weight = None
+    pe_weight = None
+    pf_weight = None
+    pcs_weight = None
+    pns_weight = None
     po_weight = None
     for name, param in agent.named_parameters():
         # if name == "project_embeddings.weight":
@@ -195,9 +312,9 @@ def init_phn_output(agent, phn, tb_writer, max_step=1000):
     # weights += [pns_weight.detach().clone()]
     weights += [po_weight.detach().clone()]
     weights = torch.concatenate(weights, dim=0)
-    opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
+    opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-5)
     for i in range(max_step):
-        loss = initialize(weights,phn,opt_init,tb_writer)
+        loss = initialize(weights,phn,opt_init,tb_writer, i)
         if loss < 1e-4:
             break
 

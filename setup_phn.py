@@ -4,7 +4,7 @@ import pathlib
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from bpdplp.bpdplp import BPDPLP
+from pdptw.pdptw import PDPTW
 from model.agent_mo import Agent
 from model.phn import PHN
 from utils import instance_to_batch
@@ -76,8 +76,8 @@ def setup_phn(args, load_best=False, validation=False):
         critic_solution_list = checkpoint["critic_solution_list"]
         last_epoch = checkpoint["epoch"] 
         
-    test_instance = BPDPLP(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
+    test_instance = PDPTW(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
     test_batch = instance_to_batch(test_instance)
-    test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
+    test_instance2 = PDPTW(instance_name="bar-n100-1",num_vehicles=6)
     test_batch2 = instance_to_batch(test_instance2)
     return agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch
