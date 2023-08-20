@@ -10,7 +10,7 @@ from tqdm import tqdm
 import matplotlib.colors as mcolors
 from scipy.stats import wilcoxon
 
-from bpdplp.bpdplp_dataset import BPDPLP_Dataset
+from pdptw.pdptw_dataset import PDPTW_Dataset
 from model.agent import Agent
 from policy.hv import Hypervolume
 from utils import prepare_args
@@ -151,8 +151,8 @@ def validate_with_test(agent:Agent, test_batch, test_batch2, tb_writer, epoch):
 
 def run(args):
     agent, critic, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch = setup(args)
-    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
-    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
+    validation_dataset = PDPTW_Dataset(num_samples=args.num_validation_samples, mode="validation")
+    train_dataset = PDPTW_Dataset(num_samples=args.num_training_samples, mode="training")
     # population training nondom list if still None or first epoch
     # if training_nondom_list is None:
     #     training_nondom_list = populate_nondom_list(agent, train_dataset, args.batch_size)

@@ -41,14 +41,15 @@ class Agent(torch.nn.Module):
         self.depot_embedder = Linear(num_node_static_features, embed_dim)
         self.pick_embedder = Linear(2*num_node_static_features, embed_dim)
         self.delivery_embedder = Linear(num_node_static_features, embed_dim)
-        self.phn = PHN(ray_hidden_size=ray_hidden_size, num_neurons=embed_dim, device=device)
+        self.phn = PHN(ray_hidden_size=ray_hidden_size, num_neurons=embed_dim, num_node_dynamic_features=num_node_dynamic_features, device=device)
         # self.project_embeddings = Linear(embed_dim, 3*embed_dim, bias=False)
         # self.project_fixed_context = Linear(embed_dim, embed_dim, bias=False)
         current_state_dim = embed_dim + num_vehicle_dynamic_features
         self.pf_weight: torch.Tensor = None
         self.pe_weight: torch.Tensor = None
         self.pcs_weight: torch.Tensor = None
-        self.pns_weight: torch.Tensor = None
+        self.pns1_weight: torch.Tensor = None
+        self.pns2_weight: torch.Tensor = None
         self.po_weight: torch.Tensor = None
         # self.project_current_vehicle_state = Linear(current_state_dim, embed_dim, bias=False)
         # self.project_node_state = Linear(num_node_dynamic_features, 3*embed_dim, bias=False)
@@ -66,8 +67,18 @@ class Agent(torch.nn.Module):
         self.pf_weight = param_dict["pf_weight"]
         self.pe_weight = param_dict["pe_weight"]
         self.pcs_weight = param_dict["pcs_weight"]
-        self.pns_weight = param_dict["pns_weight"]
+        self.pns1_weight = param_dict["pns1_weight"]
+        self.pns2_weight = param_dict["pns2_weight"]
         self.po_weight = param_dict["po_weight"]
+
+    def get_node_dynamic_embeddings(self, node_dynamic_features: torch.Tensor):
+        is_to_be_delivered_flag = node_dynamic_features[:,:,:,-1].unsqueeze(-1)
+        node_dynamic_features = node_dynamic_features[:,:,:,:-1]
+        x = F.linear(node_dynamic_features, self.pns1_weight)
+        x_ = torch.concatenate([x, is_to_be_delivered_flag], dim=-1)
+        x_ = F.linear(x_, self.pns2_weight)
+        node_dynamic_embeddings = x+x_
+        return node_dynamic_embeddings
     
     # @torch.jit.script_method
     def forward(self,
@@ -86,7 +97,7 @@ class Agent(torch.nn.Module):
         n_heads, key_size = self.n_heads, self.key_size
         current_vehicle_state = torch.cat([prev_node_embeddings, vehicle_dynamic_features], dim=-1)
         projected_current_vehicle_state = F.linear(current_vehicle_state, self.pcs_weight)
-        node_dynamic_embeddings = F.linear(node_dynamic_features, self.pns_weight)
+        node_dynamic_embeddings = self.get_node_dynamic_embeddings(node_dynamic_features)
         glimpse_V_dynamic, glimpse_K_dynamic, logit_K_dynamic = node_dynamic_embeddings.chunk(3, dim=-1)
         glimpse_V_dynamic = glimpse_V_dynamic.view((batch_size*num_vehicles,num_nodes,-1))
         glimpse_V_dynamic = self._make_heads(glimpse_V_dynamic)

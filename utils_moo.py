@@ -8,22 +8,10 @@ import random
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from policy.policy import Policy
-from bpdplp.bpdplp_env import BPDPLP_Env
+from pdptw.pdptw_env import PDPTW_Env
 from policy.non_dominated_sorting import fast_non_dominated_sort
 from utils import encode, solve_decode_only
 from solver.hv_maximization import HvMaximization
-
-def get_hv_d(batch_f_list):
-    hv_d_list = [] 
-    batch_size, num_sample, num_obj = batch_f_list.shape
-    mo_opt = HvMaximization(n_mo_sol=num_sample, n_mo_obj=num_obj)
-    for i in range(batch_size):
-        obj_instance = np.transpose(batch_f_list[i,:,:])
-        hv_d = mo_opt.compute_weights(obj_instance).transpose(0,1)
-        hv_d_list += [hv_d.unsqueeze(0)]
-    hv_d_list = torch.cat(hv_d_list, dim=0)
-    return hv_d_list
 
 def compute_loss(logprobs, reward_list, ray):
     device = logprobs.device
@@ -73,8 +61,8 @@ def get_ray(device):
 def solve_one_batch(agent, batch, nondom_list=None):
     idx_list = batch[0]
     batch = batch[1:]
-    num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
-    env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
+    num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix = batch
+    env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
     static_features,_,_,_ = env.begin()
     static_features = torch.from_numpy(static_features).to(agent.device)
     encode_results = encode(agent, static_features)

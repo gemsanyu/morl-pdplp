@@ -4,7 +4,7 @@ import pathlib
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from bpdplp.bpdplp import BPDPLP
+from pdptw.pdptw import PDPTW
 from model.agent import Agent
 from utils import instance_to_batch
 
@@ -12,7 +12,7 @@ CPU_DEVICE = torch.device("cpu")
 
 NUM_NODE_STATIC_FEATURES = 4
 NUM_VEHICLE_DYNAMIC_FEATURES = 2
-NUM_NODE_DYNAMIC_FEATURES = 1
+NUM_NODE_DYNAMIC_FEATURES = 3
 
 def get_agent(args) -> Agent:
     agent = Agent(num_node_static_features=NUM_NODE_STATIC_FEATURES,
@@ -68,8 +68,8 @@ def setup(args):
         validation_nondom_list = checkpoint["validation_nondom_list"]
         last_epoch = checkpoint["epoch"] 
         
-    test_instance = BPDPLP(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
+    test_instance = PDPTW(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
     test_batch = instance_to_batch(test_instance)
-    test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
+    test_instance2 = PDPTW(instance_name="bar-n400-1",num_vehicles=3)
     test_batch2 = instance_to_batch(test_instance2)
     return agent, critic, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch
