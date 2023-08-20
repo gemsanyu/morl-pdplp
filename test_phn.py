@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from bpdplp.bpdplp_env import BPDPLP_Env
+from pdptw.pdptw_env import PDPTW_Env
 from model.agent import Agent
 from utils_moo import get_ray_list
 from utils import encode_strict, solve_decode_only, prepare_args
@@ -22,8 +22,8 @@ def test(agent:Agent, test_batch, x_file, y_file, t_file, num_ray=200):
     agent.eval()
     total_start = time.time()
     ray_list =  get_ray_list(num_ray, agent.device, is_random=False)
-    idx, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = test_batch
-    env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
+    idx, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix = test_batch
+    env = PDPTW_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix)
     static_features,_,_,_ = env.begin()
     encode_start = time.time()
     static_features = torch.from_numpy(static_features).to(agent.device)
@@ -42,8 +42,8 @@ def test(agent:Agent, test_batch, x_file, y_file, t_file, num_ray=200):
         glimpse_K_static = agent._make_heads(glimpse_K_static)
         glimpse_V_static = agent._make_heads(glimpse_V_static)
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
-        _, _, _, travel_costs, late_penalties, _, sum_logprobs, _ = solve_results
-        f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
+        _, _, _, travel_costs, num_unserved_req, _, sum_logprobs, _ = solve_results
+        f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], num_unserved_req[:,np.newaxis,np.newaxis]], axis=2)
         batch_f_list += [f_list]
         logprob_list += [sum_logprobs.unsqueeze(1)]
     batch_f_list = np.concatenate(batch_f_list, axis=1)
@@ -54,8 +54,8 @@ def test(agent:Agent, test_batch, x_file, y_file, t_file, num_ray=200):
     # now write to corresponding file
     for f in batch_f_list[0,:]:
         travel_cost_str ="{:.16f}".format(f[0])
-        late_penalty_str="{:.16f}".format(f[1])
-        y_file.write((travel_cost_str +" "+late_penalty_str+"\n"))
+        unserved_req_str=str(int(f[1]))
+        y_file.write((travel_cost_str +" "+unserved_req_str+"\n"))
 
     # print x? apanya yang diprint....
     total_duration = "{:.16f}".format(total_duration)
@@ -82,4 +82,5 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
+    numba.set_num_threads(1)
     run(args)

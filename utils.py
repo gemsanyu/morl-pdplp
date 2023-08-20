@@ -146,5 +146,6 @@ def solve_decode_only(agent, env:PDPTW_Env, node_embeddings, fixed_context, glim
         it += 1
     tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited = env.finish()
     last_it = (torch.argmax(logprob_list, dim=-1)-1).cpu().numpy()
-    reward_list[batch_idx, last_it, 1] += (num_node_not_visited/2)*101
-    return tour_list, arrived_time_list, departure_time_list, travel_time, num_node_not_visited, reward_list, logprob_list, sum_entropies
+    num_unserved_req = num_node_not_visited/2
+    reward_list[batch_idx, last_it, 1] += num_unserved_req*101
+    return tour_list, arrived_time_list, departure_time_list, travel_time, num_unserved_req, reward_list, logprob_list, sum_entropies
