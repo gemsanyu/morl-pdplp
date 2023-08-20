@@ -23,15 +23,15 @@ def test_all_parallel(instances_list, title, num_ray):
         config_list += [[instance_name, num_vec, title, num_ray]]
     # print(len(config_list))
     # exit()
-    for config in config_list:
-        test_proc(config[0], config[1], config[2], config[3])
-    # with mp.Pool(10) as pool:
-    #    pool.starmap(test_proc, config_list)
+    # for config in config_list:
+    #     test_proc(config[0], config[1], config[2], config[3])
+    with mp.Pool(20) as pool:
+       pool.starmap(test_proc, config_list)
     # for config in config_list:
     #     test(*config)
 
 if __name__ == "__main__":
-    title="moco-hnc"
+    title="moco-hnc-pdptw"
     num_ray=200
 
     instances_list = [
