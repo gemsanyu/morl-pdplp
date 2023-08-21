@@ -103,7 +103,7 @@ def validate_one_epoch(args, agent, phn, critic_phn, validation_nondom_list, cri
     tb_writer.add_figure("Solutions Validation 1", plt.gcf(), epoch)
     
     plt.figure()
-    plt.scatter(f_list[1,:,0], f_list[1,:,1]/2, c=gradient, cmap=my_cmap)
+    plt.scatter(f_list[-1,:,0], f_list[-1,:,1]/2, c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions Validation 2", plt.gcf(), epoch)
     validate_with_test(agent, phn, test_batch, test_batch2, tb_writer, epoch)
     return is_improving, validation_nondom_list, critic_solution_list, critic_phn
@@ -158,7 +158,7 @@ def run(args):
     train_dataset = PDPTW_Dataset(num_samples=args.num_training_samples, mode="training")
     # init_phn_output(agent, phn, tb_writer, max_step=1000)
     opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
-    # phn = init_one_epoch(args, agent, phn, opt_init,train_dataset)
+    phn = init_one_epoch(args, agent, phn, opt_init,train_dataset)
     init_epoch = 1
     opt_directions = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     for epoch in range(last_epoch+1, args.max_epoch):

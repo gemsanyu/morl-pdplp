@@ -42,7 +42,7 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
     batch_f_list = (batch_f_list-utopia)/denom
     greedy_batch_f_list = (greedy_batch_f_list-utopia)/denom
     A = batch_f_list-greedy_batch_f_list
-    # norm_obj = batch_f_list
+    norm_obj = A
 
 
     logprob_list = logprob_list.unsqueeze(2)
@@ -217,8 +217,8 @@ def init_one_epoch(args, agent, phn, opt, train_dataset):
                                         active_logits_K_static,
                                         active_feasibility_mask,
                                         param_dict=param_dict)
-            batch_diff = batch_size - active_batch_size
-            probs_phn = torch.nn.functional.pad(probs_phn, (0,0,0,batch_diff), "constant", 0)
+            # batch_diff = batch_size - active_batch_size
+            # probs_phn = torch.nn.functional.pad(probs_phn, (0,0,0,batch_diff), "constant", 0)
             probs_phn_list += [probs_phn]
             with torch.no_grad():
                 probs = agent.get_probs(active_node_embeddings,
@@ -231,7 +231,7 @@ def init_one_epoch(args, agent, phn, opt, train_dataset):
                                         active_logits_K_static,
                                         active_feasibility_mask)
                 
-                probs = torch.nn.functional.pad(probs, (0,0,0,batch_diff), "constant", 0)
+                # probs = torch.nn.functional.pad(probs, (0,0,0,batch_diff), "constant", 0)
                 probs_list += [probs]
                 forward_results = agent.forward(active_node_embeddings,
                                         active_fixed_context,
@@ -256,14 +256,17 @@ def init_one_epoch(args, agent, phn, opt, train_dataset):
             active_batch_idx = batch_idx[is_still_feasible]
             feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
         kl_loss = KLDivLoss(reduction='batchmean',log_target=True)
-        probs_list = torch.concatenate(probs_list, dim=0).log()
-        probs_phn_list = torch.concatenate(probs_phn_list, dim=0).log()
-        loss = kl_loss(probs_phn_list, probs_list)
+        # probs_list = torch.concatenate(probs_list, dim=0).log()
+        # probs_phn_list = torch.concatenate(probs_phn_list, dim=0).log()
+        loss_list = []
+        for i in range(len(probs_list)):
+           loss = kl_loss(probs_phn_list[i], probs_list[i])
+           loss_list += [loss]
+        loss_list = torch.Tensor(loss_list).mean()
         loss.backward()
         opt.step()
         opt.zero_grad()
         agent.zero_grad()
-        print("HELLO")
     return phn
 
 

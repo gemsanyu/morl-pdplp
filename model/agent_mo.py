@@ -189,8 +189,6 @@ class Agent(torch.nn.Module):
         if param_dict is not None:
             final_Q = F.linear(concated_heads, param_dict["po_weight"])
         else:
-            print(torch.any(torch.isnan(attention)))
-            print("AA", torch.any(torch.isnan(concated_heads)))
             final_Q = self.project_out(concated_heads)
         logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
         logits = torch.tanh(logits) * self.tanh_clip
