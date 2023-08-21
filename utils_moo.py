@@ -46,14 +46,14 @@ def compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, gre
 
 
     logprob_list = logprob_list.unsqueeze(2)
-    # loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
-    # hv_d_list = get_hv_d(loss_per_obj.detach().cpu().numpy())
-    # hv_d_list = hv_d_list.to(device)
-    # hv_loss_per_obj = loss_per_obj*hv_d_list
-    hv_d_list = get_hv_d(A.transpose((1,0,2))).transpose(1,0)
+    loss_per_obj = logprob_list*torch.from_numpy(norm_obj).to(logprob_list.device)
+    hv_d_list = get_hv_d(loss_per_obj.detach().cpu().numpy())
     hv_d_list = hv_d_list.to(device)
-    A = torch.from_numpy(A).to(logprob_list.device)
-    hv_loss_per_obj = logprob_list*A*hv_d_list
+    hv_loss_per_obj = loss_per_obj*hv_d_list
+    # hv_d_list = get_hv_d(A.transpose((1,0,2))).transpose(1,0)
+    # hv_d_list = hv_d_list.to(device)
+    # A = torch.from_numpy(A).to(logprob_list.device)
+    # hv_loss_per_obj = logprob_list*A*hv_d_list
     hv_loss_per_instance = hv_loss_per_obj.sum(dim=2)
     hv_loss_per_ray = hv_loss_per_instance.mean(dim=0)
     hv_loss = hv_loss_per_ray.sum()

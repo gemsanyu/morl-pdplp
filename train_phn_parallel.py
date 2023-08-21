@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 import torch
+import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.colors as mcolors
@@ -21,7 +22,6 @@ from setup_phn import setup_phn
 
 LIGHT_BLUE = mcolors.CSS4_COLORS['lightblue']
 DARK_BLUE = mcolors.CSS4_COLORS['darkblue']
-C = 100
 
 def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos_penalty_loss_list):
     tb_writer.add_scalar("Training HV LOSS", hv_loss_list.mean(), epoch)
@@ -48,12 +48,10 @@ def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_da
         with torch.no_grad():
             crit_param_dict_list = generate_params(critic_phn, ray_list)
             _, greedy_batch_f_list, _, training_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, training_nondom_list)
-        batch_f_list[:,:,1] *= C/2
-        greedy_batch_f_list[:,:,1] *= C/2
         idx_list = batch[0]
         hv_loss, cos_penalty_loss = compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, greedy_batch_f_list, ray_list)
         spread_loss = compute_spread_loss(logprob_list, training_nondom_list, idx_list, batch_f_list)
-        final_loss = hv_loss - 0.05*spread_loss
+        final_loss = hv_loss - 0.01*spread_loss
         if init_stage:
             final_loss = 0
         final_loss -= ld*cos_penalty_loss
@@ -99,11 +97,11 @@ def validate_one_epoch(args, agent, phn, critic_phn, validation_nondom_list, cri
     colors = np.vstack((mcolors.to_rgba(LIGHT_BLUE), mcolors.to_rgba(DARK_BLUE)))
     my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
     plt.figure()
-    plt.scatter(f_list[0,:,0], f_list[0,:,1]/2, c=gradient, cmap=my_cmap)
+    plt.scatter(f_list[0,:,0], f_list[0,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions Validation 1", plt.gcf(), epoch)
     
     plt.figure()
-    plt.scatter(f_list[1,:,0], f_list[1,:,1]/2, c=gradient, cmap=my_cmap)
+    plt.scatter(f_list[1,:,0], f_list[1,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions Validation 2", plt.gcf(), epoch)
     validate_with_test(agent, phn, test_batch, test_batch2, tb_writer, epoch)
     return is_improving, validation_nondom_list, critic_solution_list, critic_phn
@@ -141,16 +139,16 @@ def validate_with_test(agent, phn, test_batch, test_batch2, tb_writer, epoch):
     colors = np.vstack((mcolors.to_rgba(LIGHT_BLUE), mcolors.to_rgba(DARK_BLUE)))
     my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(param_dict_list))
     plt.figure()
-    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1]/2, c=gradient, cmap=my_cmap)
+    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), epoch)
     
     _, test_f_list,_, _ = solve_one_batch(agent, param_dict_list, test_batch2, None)
     plt.figure()
-    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1]/2, c=gradient, cmap=my_cmap)
+    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), epoch)
     
 
-def run(args):
+def run(rank, world_size, args):
     patience=10
     not_improving_count = 0
     agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch = setup_phn(args)
@@ -183,4 +181,4 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
-    run(args)
+    # run(args)
