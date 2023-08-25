@@ -21,9 +21,9 @@ class BPDPLP_Dataset(Dataset):
                  depot_location_list:List[int] = [RANDOM, CENTRAL],
                  graph_seed_name_list:List[str] = ["barcelona.txt"],
                  mode:str="training",
+                 li_lim=False,
             ) -> None:
         super(BPDPLP_Dataset, self).__init__()
-
         # num_vehicles_list = [1,2,3,5]
         # num_clusters_list = [3]
         # cluster_delta_list = [1]
@@ -32,7 +32,7 @@ class BPDPLP_Dataset(Dataset):
         # max_capacity_list = [100]
         # distribution_list = [RANDOM]
         # depot_location_list = [RANDOM]
-
+        self.li_lim = li_lim
         self.num_samples = num_samples
         self.num_requests = num_requests
         self.num_vehicles_list = num_vehicles_list
@@ -97,6 +97,8 @@ class BPDPLP_Dataset(Dataset):
         nr,nv,nc,cd,pt,twl,mc,d,dl = config
         idx = (index // len(self.config_list))
         instance_name = "nr_"+str(nr)+"_nv_"+str(nv)+"_nc_"+str(nc)+"_cd_"+str(cd)+"_pt_"+str(pt)+"_twl_"+str(twl)+"_mc_"+str(mc)+"_d_"+str(d)+"_dl_"+str(dl)+"_idx_"+str(idx)
+        if self.li_lim:
+            instance_name = "lim_instances/"+instance_name
         data_path = pathlib.Path(".")/"dataset"/self.mode/(instance_name+".npz")
         data = np.load(data_path.absolute())
         coords = torch.from_numpy(data["coords"])

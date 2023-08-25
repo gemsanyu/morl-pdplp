@@ -17,6 +17,7 @@ class BPDPLP(object):
                 time_window_length=60,
                 max_capacity=100,
                 graph_seed=None, 
+                li_lim=False,
                 distribution=CLUSTER,
                 depot_location=CENTRAL,
                 cluster_delta=1.2,
@@ -34,6 +35,7 @@ class BPDPLP(object):
         self.num_cluster = num_cluster
         self.graph_seed = graph_seed
         self.instance_name = instance_name
+        self.li_lim = li_lim
         if instance_name is None:
             self.generate_instance()
         else:
@@ -64,14 +66,17 @@ class BPDPLP(object):
     The L stands for list of candidate nodes as in (Sartori and Buriol, 2020)
     """
     def generate_instance(self):
-        self.coords, self.distance_matrix = generate_graph(self.graph_seed, self.num_nodes, self.num_cluster, self.cluster_delta, self.distribution, self.depot_location)
+        if not self.li_lim:
+            self.coords, self.distance_matrix = generate_graph(self.graph_seed, self.num_nodes, self.num_cluster, self.cluster_delta, self.distribution, self.depot_location)
+        else:
+            self.coords, self.distance_matrix = generate_graph(None, self.num_nodes, self.num_cluster, self.cluster_delta, self.distribution, self.depot_location, True)
+        self.service_durations = (np.random.randint(3, size=(self.num_nodes))+1)*5
+        self.service_durations[0]=0
+        self.time_windows = generate_time_windows(self.num_requests, self.planning_time, self.time_window_length, self.service_durations, self.distance_matrix)
         self.demands = np.random.random(size=(self.num_nodes))*(0.6*self.max_capacity-10) + 10
         self.demands = np.floor(self.demands)
         self.demands[0] = 0
         self.demands[self.num_requests+1:] = -self.demands[1:self.num_requests+1]
-        self.service_durations = (np.random.randint(3, size=(self.num_nodes))+1)*5
-        self.service_durations[0]=0
-        self.time_windows = generate_time_windows(self.num_requests, self.planning_time, self.time_window_length, self.service_durations, self.distance_matrix)
         a = np.random.randint(0,3,size=(self.num_nodes, self.num_nodes), dtype=np.int8)
         road_types = np.tril(a) + np.tril(a, -1).T
         self.road_types = road_types

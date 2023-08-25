@@ -4,7 +4,7 @@ import pathlib
 import numpy as np
 import pickle
 from sklearn.cluster import KMeans
-from sklearn.metrics.pairwise import haversine_distances
+from sklearn.metrics.pairwise import haversine_distances, pairwise_distances
 
 # road types
 SLOW=0
@@ -125,9 +125,11 @@ def sample_cluster_from_graph(num_nodes, num_cluster, coords, haversine_matrix, 
     
     return clusters
 
-
-def generate_graph(graph_seed, num_nodes, num_cluster, cluster_delta, distribution, depot_location):
-    coords_L, distance_matrix_L, haversine_matrix_L = graph_seed
+def generate_graph(graph_seed=None, num_nodes=10, num_cluster=1, cluster_delta=1, distribution=RANDOM, depot_location=RANDOM, li_lim=False):
+    if graph_seed is not None:
+        coords_L, distance_matrix_L, haversine_matrix_L = graph_seed
+    else:
+        coords_L, distance_matrix_L, haversine_matrix_L = get_random_graph(1000)
     num_nodes_L = len(coords_L)
     chosen_nodes_idx = None
     if distribution == RANDOM:
@@ -163,9 +165,12 @@ def generate_graph(graph_seed, num_nodes, num_cluster, cluster_delta, distributi
             max_coords_clusters = [np.max(coords_L[cluster], axis=0, keepdims=True) for cluster in odd_clusters]
             central_coords_clusters = [(min_coords_clusters[i]+max_coords_clusters[i])/2 for i in range(len(odd_clusters))]
             central_coords_clusters = np.concatenate(central_coords_clusters, axis=0)
-            haversine_from_bigger_to_centrals = haversine_distances(coords_L[largest_cluster], central_coords_clusters)
+            if not li_lim:
+                distance_from_bigger_to_centrals = haversine_distances(coords_L[largest_cluster], central_coords_clusters)
+            else:
+                distance_from_bigger_to_centrals = pairwise_distances(coords_L[largest_cluster], central_coords_clusters)
             # get the node idx to move and move it
-            idx_to_move = np.argmin(haversine_from_bigger_to_centrals)
+            idx_to_move = np.argmin(distance_from_bigger_to_centrals)
             cluster_to_move_into_idx = int(idx_to_move/len(largest_cluster))
             node_idx_to_move_idx = idx_to_move%len(largest_cluster)
             node_idx_to_move = largest_cluster[node_idx_to_move_idx]
@@ -199,7 +204,10 @@ def generate_graph(graph_seed, num_nodes, num_cluster, cluster_delta, distributi
         min_coords, max_coords = np.min(chosen_nodes_coords, axis=0, keepdims=True), np.max(chosen_nodes_coords, axis=0, keepdims=True)
         center_coords = (min_coords+max_coords)/2
         remaining_coords = coords_L[remaining_nodes_idx]
-        distance_to_center = haversine_distances(remaining_coords, center_coords)
+        if not li_lim:
+            distance_to_center = haversine_distances(remaining_coords, center_coords)
+        else:
+            distance_to_center = pairwise_distances(remaining_coords, center_coords)
         chosen_depot_idx_ = np.argmin(distance_to_center, keepdims=True).squeeze(0)
         chosen_depot_idx = remaining_nodes_idx[chosen_depot_idx_]
         chosen_nodes_idx = np.concatenate([chosen_depot_idx, chosen_nodes_idx], axis=0)
@@ -209,7 +217,7 @@ def generate_graph(graph_seed, num_nodes, num_cluster, cluster_delta, distributi
     haversine_matrix = haversine_matrix_L[chosen_nodes_idx, :][:, chosen_nodes_idx]
     return coords, distance_matrix
     
-def generate_time_windows(num_requests, planning_time, time_windows_length, service_durations, distance_matrix):
+def generate_time_windows(num_requests, planning_time, time_windows_length, service_durations, distance_matrix, li_lim=False):
     pickup_nodes_idx = np.arange(num_requests) + 1
     delivery_nodes_idx = pickup_nodes_idx + num_requests
     pickup_delivery_distance = distance_matrix[pickup_nodes_idx, delivery_nodes_idx]
@@ -248,3 +256,8 @@ def generate_time_windows(num_requests, planning_time, time_windows_length, serv
     time_windows = np.concatenate([pickup_time_windows, delivery_time_windows], axis=0)
     time_windows = np.insert(time_windows, 0, [0, planning_time], axis=0)
     return time_windows
+
+def get_random_graph(num_nodes=1000):
+    coords = np.random.rand(num_nodes,2) * 100
+    distance_matrix = pairwise_distances(coords)
+    return coords, distance_matrix, distance_matrix 
