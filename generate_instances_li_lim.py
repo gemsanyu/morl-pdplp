@@ -67,11 +67,12 @@ def generate(nr,nv,nc,cd,it,twl,d,dl,mode,idx):
                         distance_matrix=instance.distance_matrix,
                         norm_distance_matrix=instance.norm_distance_matrix,
                         road_types=instance.road_types,
-                        max_capacity=instance.max_capacity)
+                        max_capacity=instance.max_capacity,
+                        planning_time=instance.planning_time)
     
 
 def run():
-    num_samples_per_config = 40
+    num_samples_per_config = 1
     num_requests_list = [50]
     num_vehicles_list = [1,2,3,5]
     num_clusters_list = [3,4,5,6,7,8]
@@ -80,7 +81,7 @@ def run():
     instance_type_list = [SMALL, BIG]
     distribution_list = [RANDOM, RANDOMCLUSTER, CLUSTER]
     depot_location_list = [RANDOM, CENTRAL]
-    mode ="training"
+    mode ="validation"
     config_list = [(nr,nv,nc,cd,it,twl,d,dl,mode,idx) for nr in num_requests_list for nv in num_vehicles_list for nc in num_clusters_list for cd in cluster_delta_list for it in instance_type_list for twl in time_window_length_list for d in distribution_list for dl in depot_location_list for idx in range(num_samples_per_config)]
     with Pool(processes=12) as pool:
         L = pool.starmap(generate, config_list)

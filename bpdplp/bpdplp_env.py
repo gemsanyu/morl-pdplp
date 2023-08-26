@@ -82,7 +82,7 @@ class BPDPLP_Env(object):
         self.norm_time_windows = norm_time_windows.numpy()
         self.service_durations = service_durations.numpy()
         self.norm_service_durations = norm_service_durations.numpy()
-        self.distance_matrix = distance_matrix.numpy()
+        self.distance_matrix = distance_matrix.numpy().astype(np.float32)
         self.norm_distance_matrix = norm_distance_matrix.numpy()
         self.road_types = road_types.numpy()
         

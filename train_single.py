@@ -124,8 +124,8 @@ def run(args):
     best_agent = copy.deepcopy(agent)
     if best_agent_state_dict is not None:
         best_agent.load_state_dict(best_agent_state_dict)
-    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
-    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
+    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation", li_lim=True)
+    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training", li_lim=True)
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch)
         is_improving, best_validation_score, best_agent = validate_one_epoch(agent, validation_dataset, best_validation_score, best_agent, tb_writer, epoch)
