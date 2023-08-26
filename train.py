@@ -50,7 +50,7 @@ def populate_nondom_list(agent: Agent, train_dataset, batch_size, num_ray=10):
     return training_nondom_list
 
 @torch.no_grad()        
-def validate_one_epoch(args, agent:Agent, critic:Agent, validation_nondom_list, critic_solution_list, validation_dataset, test_batch, test_batch2, tb_writer, epoch):
+def validate_one_epoch(args, agent:Agent, critic:Agent, validation_nondom_list, critic_solution_list, validation_dataset, test_batch, tb_writer, epoch):
     agent.eval()
     validation_dataloader = DataLoader(validation_dataset, batch_size=args.batch_size)
     if validation_nondom_list is None:
@@ -93,7 +93,7 @@ def validate_one_epoch(args, agent:Agent, critic:Agent, validation_nondom_list, 
     plt.figure()
     plt.scatter(solution_list[-1,:,0], solution_list[-1,:,1], c=gradient, cmap=my_cmap)
     tb_writer.add_figure("Solutions Validation 2", plt.gcf(), epoch)
-    validate_with_test(agent, test_batch, test_batch2, tb_writer, epoch)
+    validate_with_test(agent, test_batch, tb_writer, epoch)
     return validation_nondom_list, critic_solution_list, critic
 
 def compare_with_critic(agent, critic, validation_nondom_list, solution_list, critic_solution_list):
@@ -121,7 +121,7 @@ def compare_with_critic(agent, critic, validation_nondom_list, solution_list, cr
         critic_solution_list = solution_list
     return critic_solution_list, critic
 
-def validate_with_test(agent:Agent, test_batch, test_batch2, tb_writer, epoch):
+def validate_with_test(agent:Agent, test_batch, tb_writer, epoch):
     ray_list =  get_ray_list(50, agent.device, is_random=False)
     test_f_list = []
     for ray in ray_list:
@@ -135,31 +135,19 @@ def validate_with_test(agent:Agent, test_batch, test_batch2, tb_writer, epoch):
     my_cmap = mcolors.LinearSegmentedColormap.from_list('my_colormap', colors, N=len(ray_list))
     plt.figure()
     plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
-    tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), epoch)
-    
-    test_f_list = []
-    for ray in ray_list:
-        agent.get_param_dict(ray)
-        _, f_list,_, _ = solve_one_batch(agent, test_batch2, None)
-        test_f_list += [f_list[:, np.newaxis, :]]
-    test_f_list = np.concatenate(test_f_list, axis=1)
-
-    plt.figure()
-    plt.scatter(test_f_list[0,:,0], test_f_list[0,:,1], c=gradient, cmap=my_cmap)
-    tb_writer.add_figure("Solutions bar-n400-1-"+str(args.test_num_vehicles), plt.gcf(), epoch)
-    
+    tb_writer.add_figure("Solutions "+args.test_instance_name+"-"+str(args.test_num_vehicles), plt.gcf(), epoch)    
 
 def run(args):
-    agent, critic, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch = setup(args)
-    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation")
-    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training")
+    agent, critic, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, last_epoch = setup(args)
+    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation", li_lim=True)
+    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training", li_lim=True)
     # population training nondom list if still None or first epoch
     # if training_nondom_list is None:
     #     training_nondom_list = populate_nondom_list(agent, train_dataset, args.batch_size)
     
     for epoch in range(last_epoch+1, args.max_epoch):
         train_one_epoch(args, agent, opt, train_dataset, tb_writer, epoch)
-        validation_nondom_list, critic_solution_list, critic = validate_one_epoch(args, agent, critic, validation_nondom_list, critic_solution_list, validation_dataset, test_batch, test_batch2, tb_writer, epoch)
+        validation_nondom_list, critic_solution_list, critic = validate_one_epoch(args, agent, critic, validation_nondom_list, critic_solution_list, validation_dataset, test_batch, tb_writer, epoch)
         save(args.title, epoch, agent, critic, opt, validation_nondom_list, critic_solution_list)
 
 if __name__ == "__main__":
