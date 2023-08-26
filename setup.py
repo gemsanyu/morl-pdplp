@@ -1,7 +1,10 @@
 import os
 import pathlib
 
+from bpdplp.bpdplp import BPDPLP
 from model.agent_so import Agent
+from utils import instance_to_batch
+
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -45,5 +48,8 @@ def setup(args, load_best=False):
         best_validation_score = checkpoint["best_validation_score"]
         opt.load_state_dict(checkpoint["agent_opt_state_dict"])
         last_epoch = checkpoint["epoch"]    
+    
+    test_instance = BPDPLP(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
+    test_batch = instance_to_batch(test_instance)
 
-    return agent, opt, best_agent_state_dict, best_validation_score, tb_writer, last_epoch
+    return agent, opt, best_agent_state_dict, best_validation_score, test_batch, tb_writer, last_epoch
