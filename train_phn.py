@@ -153,7 +153,7 @@ def run(args):
     agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, last_epoch = setup_phn(args)
     validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation", li_lim=True)
     train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training", li_lim=True)
-    # init_phn_output(agent, phn, tb_writer, max_step=1000)
+    init_phn_output(agent, phn, tb_writer, max_step=1000)
     # opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     # phn = init_one_epoch(args, agent, phn, opt_init,train_dataset)
     init_epoch = 1
