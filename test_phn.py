@@ -60,12 +60,11 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     
 
 def run(args):
-    agent, _, phn, _, _, _, _, _, test_batch, _ = setup_phn(args)
+    agent, _, phn, _, _, _, _, _, test_batch, _, _ = setup_phn(args, validation=True)
     result_dir = pathlib.Path(".")/"result"/args.title
     result_dir.mkdir(parents=True, exist_ok=True)
     title = args.test_instance_name +"-"+str(args.test_num_vehicles) + "-" + args.title
     y_file_path = result_dir/(title+".y")
-    y_file_path.parents[0].mkdir(parents=True, exist_ok=True)
     x_file_path = result_dir/(title+".x")
     t_file_path = result_dir/(title+".t")
     with open(x_file_path.absolute(), "w") as x_file, open(y_file_path.absolute(), "w") as y_file, open(t_file_path.absolute(), "w") as t_file:
