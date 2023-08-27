@@ -80,6 +80,4 @@ def setup_phn(args, load_best=False, validation=False):
         
     test_instance = BPDPLP(instance_name=args.test_instance_name,num_vehicles=args.test_num_vehicles)
     test_batch = instance_to_batch(test_instance)
-    test_instance2 = BPDPLP(instance_name="bar-n400-1",num_vehicles=3)
-    test_batch2 = instance_to_batch(test_instance2)
-    return agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, test_batch2, last_epoch
+    return agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, last_epoch

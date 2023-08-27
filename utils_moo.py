@@ -202,7 +202,8 @@ def init_one_epoch(args, agent, phn, opt, train_dataset):
                                             glimpse_V_static,
                                             glimpse_K_static,
                                             logits_K_static,
-                                            feasibility_mask)
+                                            feasibility_mask,
+                                            param_dict=param_dict)
             probs_phn_list += [probs_phn]
             with torch.no_grad():
                 probs = agent.get_probs(node_embeddings,
@@ -223,8 +224,7 @@ def init_one_epoch(args, agent, phn, opt, train_dataset):
                                             glimpse_V_static,
                                             glimpse_K_static,
                                             logits_K_static,
-                                            feasibility_mask,
-                                            param_dict=param_dict)
+                                            feasibility_mask)
             selected_vecs, selected_nodes, logprobs, entropy_list = forward_results
             selected_vecs = selected_vecs.cpu().numpy()
             selected_nodes = selected_nodes.cpu().numpy()
@@ -237,7 +237,7 @@ def init_one_epoch(args, agent, phn, opt, train_dataset):
         kl_loss = KLDivLoss(reduction='batchmean',log_target=True)
         probs_list = torch.concatenate(probs_list, dim=0).log()
         probs_phn_list = torch.concatenate(probs_phn_list, dim=0).log()
-        print(probs_list.shape, probs_phn_list.shape)
+        # print(probs_list.shape, probs_phn_list.shape)
         loss = kl_loss(probs_phn_list, probs_list)
         loss.backward()
         opt.step()

@@ -99,7 +99,10 @@ class Agent(torch.nn.Module):
         heads = attention@glimpse_V
         concated_heads = heads.permute(1,2,3,0,4).contiguous()
         concated_heads = concated_heads.view(batch_size, num_vehicles, 1, self.embed_dim)
-        final_Q = F.linear(concated_heads, param_dict["po_weight"])
+        if param_dict is not None:
+            final_Q = F.linear(concated_heads, param_dict["po_weight"])
+        else:
+            final_Q = self.project_out(concated_heads)
         logits = final_Q@logit_K.permute(0,1,3,2) / math.sqrt(final_Q.size(-1)) #batch_size, num_items, embed_dim
         logits = torch.tanh(logits) * self.tanh_clip
         logits = logits.squeeze(2) + feasibility_mask.float().log()
