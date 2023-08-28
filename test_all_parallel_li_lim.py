@@ -19,10 +19,10 @@ def test_all_parallel(instances_list, title, num_ray):
     for instance in instance_list:
         instance_name, num_vec = instance
         config_list += [[instance_name, num_vec, title, num_ray]]
-    for config in config_list:
-        test_proc(config[0], config[1], config[2], config[3])
-#    with mp.Pool(20) as pool:
-#        pool.starmap(test_proc, config_list)
+#    for config in config_list:
+#        test_proc(config[0], config[1], config[2], config[3])
+    with mp.Pool(32) as pool:
+        pool.starmap(test_proc, config_list)
     # for config in config_list:
     #     test(*config)
 
