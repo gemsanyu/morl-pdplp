@@ -38,10 +38,12 @@ def compute_travel_time(distance, current_time, horizon, time_horizon, speed_pro
 @nb.jit(nb.float32[:](nb.float32[:], nb.float32[:],  nb.float32[:,:], nb.float32[:,:]), cache=True, nopython=True, parallel=True)
 def compute_travel_time_loop(distances, current_times, time_horizons, speed_profiles):
     travel_times = np.empty(len(current_times), dtype=np.float32)
-    horizons = find_passed_hz(time_horizons, current_times) - 1
-    for i in nb.prange(len(current_times)):
-        travel_times[i] = compute_travel_time(distances[i],current_times[i], horizons[i],time_horizons[i,:],speed_profiles[i,:])
-    return travel_times    
+    # horizons = find_passed_hz(time_horizons, current_times) - 1
+    # horizons = 0
+    # for i in nb.prange(len(current_times)):
+    #     travel_times[i] = compute_travel_time(distances[i],current_times[i], 0,time_horizons[i,:],speed_profiles[i,:])
+    # return travel_times    
+    return distances
 
 """
     we need to add dummy vehicles,
