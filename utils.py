@@ -34,7 +34,7 @@ def instance_to_batch(instance:BPDPLP)->BPDPLP_Env:
     # return env
     return 0, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
     
-
+@profile
 def encode(agent, static_features):
     num_requests = int((static_features.shape[1]-1)//2)
     depot_static_features = static_features[:, 0].unsqueeze(1)
@@ -67,6 +67,7 @@ i hope it doesn't affect the agent training,
 i think it will not because we will mask the glimpse computation
 too. i guess.
 """
+@profile
 def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict=None):
     batch_size, num_nodes, embed_dim = node_embeddings.shape
     batch_idx = np.arange(batch_size)

@@ -1,4 +1,3 @@
-import profile
 import time
 
 import numpy as np
@@ -214,6 +213,7 @@ class BPDPLP_Env(object):
         5. travel cost,
         6. current location,
     """
+    @profile
     def act(self, batch_idx, selected_vecs, selected_nodes):
         #just send the vehicle to the node
         # selected_nodes = np.asanyarray(selected_nodes)
@@ -226,6 +226,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
+    @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         travel_time_list = self.travel_time_list
         travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
@@ -278,9 +279,12 @@ class BPDPLP_Env(object):
         self.travel_time_list = self.get_travel_time()
         return np.concatenate([f1[:, np.newaxis], f2[:, np.newaxis]], axis=-1)
 
-
+    @profile
     def get_state(self):
-        return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 
+        vehicle_dynamic_features = self.vehicle_dynamic_features
+        node_dynamic_features = self.node_dynamic_features
+        feasibility_mask = self.feasibility_mask 
+        return vehicle_dynamic_features, node_dynamic_features, feasibility_mask
 
     """
         should we return the batch-wise results already here?

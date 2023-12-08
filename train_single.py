@@ -16,6 +16,7 @@ from utils import encode, solve_decode_only, update
 from utils import save, prepare_args
 from setup import setup
 
+@profile
 def train_one_epoch(args, agent, best_agent, opt, train_dataset, tb_writer, epoch):
     agent.train()
     best_agent.eval()
