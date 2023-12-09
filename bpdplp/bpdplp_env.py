@@ -210,6 +210,7 @@ class BPDPLP_Env(object):
         5. travel cost,
         6. current location,
     """
+    @profile
     def act(self, batch_idx, selected_vecs, selected_nodes):
         #just send the vehicle to the node
         # selected_nodes = np.asanyarray(selected_nodes)
@@ -222,7 +223,7 @@ class BPDPLP_Env(object):
         solution: tour_list, departure time
         objective vector: distance travelled, late penalty
     """
-    # @profile
+    @profile
     def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
         # assert (len(batch_idx) == self.batch_size)
         travel_time_list = self.travel_time_list
@@ -289,9 +290,12 @@ class BPDPLP_Env(object):
     #         curr_horizons = self.current_horizons[batch_idx, selected_vecs]
     #         next_time_horizons = self.time_horizons[batch_idx, curr_horizons+1]
     #         is_curr_horizon_passed = curr_time >= next_time_horizons
-
+    @profile
     def get_state(self):
-        return self.vehicle_dynamic_features, self.node_dynamic_features, self.feasibility_mask 
+        vdf = self.vehicle_dynamic_features
+        ndf = self.node_dynamic_features
+        fm = self.feasibility_mask 
+        return vdf, ndf, fm 
 
     """
         should we return the batch-wise results already here?
