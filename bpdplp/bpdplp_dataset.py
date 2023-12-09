@@ -11,7 +11,7 @@ class BPDPLP_Dataset(Dataset):
     def __init__(self,
                  num_samples:int=1000000,
                  num_requests:int = 50,
-                 num_vehicles_list:List[int] = [1,2,3,5],
+                 num_vehicles_list:List[int] = [1,3,5,10],
                  num_clusters_list:List[int] = [3,4,5,6,7,8],
                  cluster_delta_list:List[float] = [1,1.2,1.6],
                  planning_time_list:List[int] = [240,480],
@@ -81,5 +81,8 @@ class BPDPLP_Dataset(Dataset):
         norm_distance_matrix = torch.from_numpy(data["norm_distance_matrix"])
         road_types = torch.from_numpy(data["road_types"])
         max_capacity = int(data["max_capacity"])
-        planning_time = int(data["planning_time"])
+        if self.li_lim:
+                planning_time = int(data["planning_time"])
+        else:
+                planning_time = pt
         return index, nv, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types

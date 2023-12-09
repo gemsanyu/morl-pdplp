@@ -34,13 +34,14 @@ def generate(nr,nv,nc,cd,pt,twl,mc,d,dl,graph_seed,mode,idx):
                         distance_matrix=instance.distance_matrix,
                         norm_distance_matrix=instance.norm_distance_matrix,
                         road_types=instance.road_types,
-                        max_capacity=instance.max_capacity)
+                        max_capacity=instance.max_capacity,
+			planning_time=instance.planning_time)
     
 
 def run():
     num_samples_per_config = 1
     num_requests_list = [50]
-    num_vehicles_list = [1,2,3,5]
+    num_vehicles_list = [1,3,5,10]
     num_clusters_list = [3,4,5,6,7,8]
     cluster_delta_list = [1,1.2,1.6]
     planning_time_list = [240,480]
