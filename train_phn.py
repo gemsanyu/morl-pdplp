@@ -27,6 +27,7 @@ def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos
     tb_writer.add_scalar("Training Spread Loss", spread_loss_list.mean(), epoch)
     tb_writer.add_scalar("Cos Penalty Loss", cos_penalty_loss_list.mean(), epoch)
     
+@profile
 def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
@@ -151,8 +152,8 @@ def run(args):
     patience=10
     not_improving_count = 0
     agent, phn, critic_phn, training_nondom_list, validation_nondom_list, critic_solution_list, opt, tb_writer, test_batch, last_epoch = setup_phn(args)
-    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation", li_lim=True)
-    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training", li_lim=True)
+    validation_dataset = BPDPLP_Dataset(num_samples=args.num_validation_samples, mode="validation", li_lim=False)
+    train_dataset = BPDPLP_Dataset(num_samples=args.num_training_samples, mode="training", li_lim=False)
     init_phn_output(agent, phn, tb_writer, max_step=1000)
     # opt_init = torch.optim.AdamW(phn.parameters(), lr=1e-4)
     # phn = init_one_epoch(args, agent, phn, opt_init,train_dataset)
