@@ -32,12 +32,18 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     decode_start = time.time()
     batch_f_list = [] 
     logprob_list = []
-    for param_dict in param_dict_list:
+    for i, param_dict in enumerate(param_dict_list):
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
         tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, sum_logprobs, sum_entropies = solve_results
         f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
         batch_f_list += [f_list]
         logprob_list += [sum_logprobs.unsqueeze(1)]
+        x_file.write(str(i)+" "+str(len(tour_list[0]))+"\n")
+        for tour in tour_list[0]:
+            tour_str = ""
+            for node in tour:
+                tour_str += str(node) + " "
+            x_file.write(tour_str+"\n")
     batch_f_list = np.concatenate(batch_f_list, axis=1)
     logprob_list = torch.cat(logprob_list, dim=1)
     decode_duration = time.time()-decode_start
