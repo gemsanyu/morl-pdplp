@@ -130,6 +130,7 @@ def generate_params(phn, ray_list):
         param_dict_list += [param_dict]
     return param_dict_list
 
+@profile
 def solve_one_batch(agent, param_dict_list, batch, nondom_list):
     idx_list = batch[0]
     batch = batch[1:]

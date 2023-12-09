@@ -29,6 +29,7 @@ def plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos
     tb_writer.add_scalar("Training Spread Loss", spread_loss_list.mean(), epoch)
     tb_writer.add_scalar("Cos Penalty Loss", cos_penalty_loss_list.mean(), epoch)
     
+@profile
 def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
 
     train_dataloader = DataLoader(train_dataset, batch_size=SMALL_BATCH_SIZE, shuffle=True, pin_memory=True, num_workers=2)
