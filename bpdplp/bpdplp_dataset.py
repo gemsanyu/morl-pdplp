@@ -11,7 +11,7 @@ class BPDPLP_Dataset(Dataset):
     def __init__(self,
                  num_samples:int=1000000,
                  num_requests:int = 50,
-                 num_vehicles_list:List[int] = [1,2,3,5],
+                 num_vehicles_list:List[int] = [1,3,5,10],
                  num_clusters_list:List[int] = [3,4,5,6,7,8],
                  cluster_delta_list:List[float] = [1,1.2,1.6],
                  planning_time_list:List[int] = [240,480],
