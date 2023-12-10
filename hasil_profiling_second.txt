@@ -1,0 +1,260 @@
+Timer unit: 1e-06 s
+
+Total time: 202.031 s
+File: /home/m381067/morl-pdplp-ham-no-coords/bpdplp/bpdplp_env.py
+Function: act at line 216
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   216                                               @profile
+   217                                               def act(self, batch_idx, selected_vecs, selected_nodes):
+   218                                                   #just send the vehicle to the node
+   219                                                   # selected_nodes = np.asanyarray(selected_nodes)
+   220                                                   # selected_vecs = np.asanyarray(selected_vecs)
+   221    365600  154925087.8    423.8     76.7          reward = self.service_node_by_vec(batch_idx, selected_vecs, selected_nodes)
+   222    365600   47106360.0    128.8     23.3          return *self.get_state(), reward
+
+Total time: 147.394 s
+File: /home/m381067/morl-pdplp-ham-no-coords/bpdplp/bpdplp_env.py
+Function: service_node_by_vec at line 229
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   229                                               @profile
+   230                                               def service_node_by_vec(self, batch_idx, selected_vecs, selected_nodes):
+   231    365600     193649.6      0.5      0.1          travel_time_list = self.travel_time_list
+   232    365600    4215079.1     11.5      2.9          travel_time_vecs = travel_time_list[batch_idx, selected_vecs, selected_nodes]
+   233    365600     119296.3      0.3      0.1          f1 = travel_time_vecs
+   234    365600    1837349.4      5.0      1.2          self.is_node_visited[batch_idx, selected_nodes] = True
+   235                                                   # isnp -> is_selected_node_pickup
+   236                                                   # assign the request to the vehicles
+   237    365600    2560152.2      7.0      1.7          isnp = selected_nodes <= self.num_requests
+   238                                                   # not_served = self.request_assignment[batch_idx[isnp], selected_nodes[isnp]-1] == -1
+   239                                                   # assert np.all(not_served)
+   240    365600    3006757.4      8.2      2.0          self.request_assignment[batch_idx[isnp], selected_nodes[isnp]-1] = selected_vecs[isnp]
+   241                                                   #add demands
+   242                                                   # isnd = selected_nodes > self.num_requests
+   243                                                   # selected_requests = selected_nodes.copy()
+   244                                                   # selected_requests[isnd] -= self.num_requests
+   245                                                   # assert np.all(self.request_assignment[batch_idx, selected_requests-1] == selected_vecs)
+   246    365600     936040.1      2.6      0.6          selected_nodes_demands = self.demands[batch_idx, selected_nodes]
+   247    365600    3056010.1      8.4      2.1          self.current_load[batch_idx, selected_vecs] += selected_nodes_demands
+   248    365600    2452338.8      6.7      1.7          self.num_visited_nodes[batch_idx, selected_vecs] += 1
+   249    365600    1361976.9      3.7      0.9          self.tour_list[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = selected_nodes
+   250    365600    1721921.7      4.7      1.2          self.departure_time_list[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = self.current_time[batch_idx, selected_vecs]
+   251                                                   #add to travel time to current time
+   252    365600    3375004.5      9.2      2.3          self.current_time[batch_idx, selected_vecs] += travel_time_vecs
+   253                                           
+   254                                                   # now filter the actions or the selected vehicles based on their current time
+   255                                                   # if early, then ceil,
+   256                                                   # if late, then add to penalty 
+   257    365600     138554.1      0.4      0.1          f2 = None 
+   258    365600     716430.5      2.0      0.5          selected_vecs_current_time = self.current_time[batch_idx, selected_vecs]
+   259    365600    1950893.5      5.3      1.3          selected_nodes_tw = self.time_windows[batch_idx, selected_nodes]
+   260    365600    1219565.8      3.3      0.8          is_too_early = selected_vecs_current_time <= selected_nodes_tw[:,0]
+   261    365600    7119726.5     19.5      4.8          if np.any(is_too_early):
+   262     29777     249633.5      8.4      0.2              self.current_time[batch_idx[is_too_early], selected_vecs[is_too_early]] = selected_nodes_tw[is_too_early,0]
+   263    365600    1060425.9      2.9      0.7          is_too_late = selected_vecs_current_time > selected_nodes_tw[:,1]
+   264    365600    2442073.7      6.7      1.7          late_penalty = (selected_vecs_current_time[is_too_late]-selected_nodes_tw[is_too_late,1])
+   265    365600     284225.3      0.8      0.2          if len(late_penalty)>0:
+   266    350248    2753529.7      7.9      1.9              self.late_penalty[batch_idx[is_too_late], selected_vecs[is_too_late]] += late_penalty
+   267                                                       # f2[is_too_late] = late_penalty
+   268    350248    1391060.8      4.0      0.9              f2 = np.empty_like(f1)
+   269    350248     552330.1      1.6      0.4              f2[is_too_late] = late_penalty
+   270    350248    1111156.4      3.2      0.8              f2[np.logical_not(is_too_late)] = 0
+   271    365600     164485.8      0.4      0.1          if f2 is None:
+   272     15352     244771.9     15.9      0.2              f2 = np.zeros_like(f1)
+   273                                                   
+   274    365600    1984306.2      5.4      1.3          self.arrived_time[batch_idx, selected_vecs, self.num_visited_nodes[batch_idx, selected_vecs]] = self.current_time[batch_idx, selected_vecs]
+   275    365600    1945061.8      5.3      1.3          self.travel_cost[batch_idx, selected_vecs] += travel_time_vecs 
+   276    365600     644838.8      1.8      0.4          self.current_location_idx[batch_idx, selected_vecs] = selected_nodes
+   277                                                   # after arriving, and start service, add service time to current time
+   278    365600    2773046.2      7.6      1.9          self.current_time[batch_idx, selected_vecs] += self.service_durations[batch_idx, selected_nodes]
+   279    365600   90440154.8    247.4     61.4          self.travel_time_list = self.get_travel_time()
+   280    365600    3372535.4      9.2      2.3          return np.concatenate([f1[:, np.newaxis], f2[:, np.newaxis]], axis=-1)
+
+Total time: 44.5059 s
+File: /home/m381067/morl-pdplp-ham-no-coords/bpdplp/bpdplp_env.py
+Function: get_state at line 282
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   282                                               @profile
+   283                                               def get_state(self):
+   284    365600   13738602.2     37.6     30.9          vehicle_dynamic_features = self.vehicle_dynamic_features
+   285    365600    7300196.3     20.0     16.4          node_dynamic_features = self.node_dynamic_features
+   286    365600   23351348.5     63.9     52.5          feasibility_mask = self.feasibility_mask 
+   287    365600     115732.0      0.3      0.3          return vehicle_dynamic_features, node_dynamic_features, feasibility_mask
+
+Total time: 4.04866 s
+File: /home/m381067/morl-pdplp-ham-no-coords/utils.py
+Function: encode at line 37
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    37                                           @profile
+    38                                           def encode(agent, static_features):
+    39       456       1759.1      3.9      0.0      num_requests = int((static_features.shape[1]-1)//2)
+    40       456      15220.8     33.4      0.4      depot_static_features = static_features[:, 0].unsqueeze(1)
+    41       456       3430.2      7.5      0.1      delivery_static_features = static_features[:,num_requests+1:]
+    42       456      26325.5     57.7      0.7      pickup_static_features = torch.concat([static_features[:,1:num_requests+1], delivery_static_features], dim=2)
+    43       456      70592.0    154.8      1.7      depot_init_embedding = agent.depot_embedder(depot_static_features)
+    44       456      46237.2    101.4      1.1      pickup_init_embedding = agent.pick_embedder(pickup_static_features)
+    45       456      30742.8     67.4      0.8      delivery_init_embedding = agent.delivery_embedder(delivery_static_features)
+    46       456      10495.6     23.0      0.3      node_init_embeddings = torch.concat([depot_init_embedding, pickup_init_embedding, delivery_init_embedding], dim=1)
+    47       456    3792168.7   8316.2     93.7      node_embeddings, graph_embeddings = agent.gae(node_init_embeddings)
+    48       456      13380.3     29.3      0.3      fixed_context = agent.project_fixed_context(graph_embeddings)
+    49       456      23644.2     51.9      0.6      glimpse_K_static, glimpse_V_static, logits_K_static = agent.project_embeddings(node_embeddings).chunk(3, dim=-1)
+    50       456       8966.4     19.7      0.2      glimpse_K_static = agent._make_heads(glimpse_K_static)
+    51       456       5533.0     12.1      0.1      glimpse_V_static = agent._make_heads(glimpse_V_static)
+    52       456        163.6      0.4      0.0      return node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static
+
+Total time: 594.817 s
+File: /home/m381067/morl-pdplp-ham-no-coords/utils.py
+Function: solve_decode_only at line 70
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    70                                           @profile
+    71                                           def solve_decode_only(agent, env:BPDPLP_Env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict=None):
+    72      3024       6058.5      2.0      0.0      batch_size, num_nodes, embed_dim = node_embeddings.shape
+    73      3024      11646.8      3.9      0.0      batch_idx = np.arange(batch_size)
+    74                                               # sum_logprobs = torch.zeros((batch_size,), device=agent.device, dtype=torch.float32)
+    75      3024      61861.7     20.5      0.0      sum_entropies = torch.zeros((batch_size,), device=agent.device, dtype=torch.float32)
+    76      3024    7659143.5   2532.8      1.3      static_features, vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.begin()
+    77      3024     441320.3    145.9      0.1      vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device, dtype=torch.float32)
+    78      3024     108034.7     35.7      0.0      node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device, dtype=torch.float32)
+    79      3024      56218.4     18.6      0.0      feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
+    80      3024       1507.3      0.5      0.0      num_vehicles = env.num_vehicles
+    81      3024      61856.8     20.5      0.0      max_num_vehicles = int(np.max(num_vehicles))
+    82                                               # num_vehicles_cum = np.concatenate([np.asanyarray([0]),np.cumsum(num_vehicles)])
+    83                                               # vehicle_batch_idx = np.concatenate([ np.asanyarray([i]*num_vehicles[i]) for i in range(batch_size)])
+    84                                               # vehicle_idx = np.concatenate([np.arange(num_vehicles[i]) for i in range(batch_size)])
+    85                                               # expanding glimpses
+    86      3024      49167.8     16.3      0.0      glimpse_V_static = glimpse_V_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
+    87      3024      21656.5      7.2      0.0      glimpse_K_static = glimpse_K_static.unsqueeze(2).expand(-1,-1,max_num_vehicles,-1,-1)
+    88      3024      21385.3      7.1      0.0      logits_K_static = logits_K_static.unsqueeze(1).expand(-1,max_num_vehicles,-1,-1)
+    89      3024      18771.4      6.2      0.0      fixed_context = fixed_context.unsqueeze(1).expand(-1,max_num_vehicles,-1)
+    90      3024       1142.2      0.4      0.0      reward_list = []
+    91      3024        859.4      0.3      0.0      logprob_list = []
+    92                                               
+    93    365424   12534382.4     34.3      2.1      while torch.any(feasibility_mask):
+    94    362400   28922140.6     79.8      4.9          prev_node_embeddings = node_embeddings[env.batch_vec_idx, env.current_location_idx.flatten(), :]
+    95    362400    2770044.1      7.6      0.5          prev_node_embeddings = prev_node_embeddings.view((batch_size,max_num_vehicles,-1))
+    96    724800  269082974.4    371.3     45.2          forward_results = agent.forward(node_embeddings,
+    97    362400     110690.9      0.3      0.0                                          fixed_context,
+    98    362400     102274.2      0.3      0.0                                          prev_node_embeddings,
+    99    362400      98112.6      0.3      0.0                                          node_dynamic_features,
+   100    362400      89673.7      0.2      0.0                                          vehicle_dynamic_features,
+   101    362400      91545.5      0.3      0.0                                          glimpse_V_static,
+   102    362400      90450.8      0.2      0.0                                          glimpse_K_static,
+   103    362400      95000.1      0.3      0.0                                          logits_K_static,
+   104    362400     103346.6      0.3      0.0                                          feasibility_mask,
+   105    362400      96999.7      0.3      0.0                                          param_dict=param_dict)
+   106    362400    1183010.3      3.3      0.2          selected_vecs, selected_nodes, logprobs, entropy_list = forward_results
+   107    362400    9837430.1     27.1      1.7          selected_vecs = selected_vecs.cpu().numpy()
+   108    362400    5579325.9     15.4      0.9          selected_nodes = selected_nodes.cpu().numpy()
+   109                                                   # env.act(batch_idx, selected_vecs, selected_nodes)
+   110    362400  204466395.9    564.2     34.4          vehicle_dynamic_features, node_dynamic_features, feasibility_mask, reward = env.act(batch_idx, selected_vecs, selected_nodes)
+   111    362400    7246671.3     20.0      1.2          logprob_list += [logprobs[:, np.newaxis]]
+   112    362400     487502.9      1.3      0.1          reward_list += [reward[:, np.newaxis, :]]
+   113    362400    7937340.5     21.9      1.3          sum_entropies += entropy_list
+   114                                                   # vehicle_dynamic_features, node_dynamic_features, feasibility_mask = env.get_state()
+   115    362400   15118925.8     41.7      2.5          vehicle_dynamic_features = torch.from_numpy(vehicle_dynamic_features).to(agent.device, dtype=torch.float32)
+   116    362400   11737213.7     32.4      2.0          node_dynamic_features = torch.from_numpy(node_dynamic_features).to(agent.device, dtype=torch.float32)
+   117    362400    6501582.1     17.9      1.1          feasibility_mask = torch.from_numpy(feasibility_mask).to(agent.device, dtype=bool)
+   118                                                   
+   119      3024     322844.3    106.8      0.1      reward_list = np.concatenate(reward_list, axis=1)
+   120      3024     688767.3    227.8      0.1      logprob_list = torch.concatenate(logprob_list, dim=1)
+   121      3024     998616.9    330.2      0.2      tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties = env.finish()
+   122      3024       2691.9      0.9      0.0      return tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, logprob_list, sum_entropies
+
+Total time: 620.413 s
+File: /home/m381067/morl-pdplp-ham-no-coords/utils_moo.py
+Function: solve_one_batch at line 133
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   133                                           @profile
+   134                                           def solve_one_batch(agent, param_dict_list, batch, nondom_list):
+   135       424        396.4      0.9      0.0      idx_list = batch[0]
+   136       424        446.4      1.1      0.0      batch = batch[1:]
+   137       424        255.9      0.6      0.0      num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = batch
+   138       424    6876068.5  16217.1      1.1      env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
+   139       424    7465400.8  17607.1      1.2      static_features,_,_,_ = env.begin()
+   140       424      34142.8     80.5      0.0      static_features = torch.from_numpy(static_features).to(agent.device)
+   141       424    3458026.2   8155.7      0.6      encode_results = encode(agent, static_features)
+   142       424        216.0      0.5      0.0      node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static = encode_results
+   143                                           
+   144       424        148.4      0.3      0.0      batch_f_list = [] 
+   145       424        107.2      0.3      0.0      logprob_list = []
+   146      3448       2093.4      0.6      0.0      for param_dict in param_dict_list:
+   147      3024  599512283.7 198251.4     96.6          solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
+   148      3024     199538.8     66.0      0.0          tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, logprobs, sum_entropies = solve_results
+   149      3024      96425.6     31.9      0.0          sum_logprobs = logprobs.sum(dim=-1)
+   150      3024      35067.3     11.6      0.0          f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
+   151      3024       2237.1      0.7      0.0          batch_f_list += [f_list]
+   152      3024      21094.2      7.0      0.0          logprob_list += [sum_logprobs.unsqueeze(1)]
+   153       424      13977.0     33.0      0.0      logprob_list = torch.cat(logprob_list, dim=1)
+   154       424       6511.8     15.4      0.0      batch_f_list = np.concatenate(batch_f_list, axis=1)
+   155       424        184.2      0.4      0.0      if nondom_list is None:
+   156         8          2.6      0.3      0.0          return logprob_list, batch_f_list, reward_list, None
+   157                                               
+   158     13728       5084.5      0.4      0.0      for i in range(env.batch_size):
+   159     13312      69613.4      5.2      0.0          idx = idx_list[i]
+   160     13312      21429.8      1.6      0.0          if nondom_list[idx] is None:
+   161      2048     320094.2    156.3      0.1              I = fast_non_dominated_sort(batch_f_list[i,:])[0]
+   162      2048      15333.6      7.5      0.0              nondom = batch_f_list[i, I, :]
+   163      2048       4479.0      2.2      0.0              nondom_list[idx] = nondom
+   164                                                   else:
+   165     11264      13439.0      1.2      0.0              nondom_old = nondom_list[idx]
+   166     11264      65840.6      5.8      0.0              nondom_old = np.concatenate([nondom_old, batch_f_list[i,:]])
+   167     11264    2075732.5    184.3      0.3              I = fast_non_dominated_sort(nondom_old)[0]
+   168     11264      97083.6      8.6      0.0              nondom_list[idx] = nondom_old[I]
+   169                                           
+   170       416        150.6      0.4      0.0      return logprob_list, batch_f_list, reward_list, nondom_list
+
+Total time: 326.256 s
+File: train_phn.py
+Function: train_one_epoch at line 30
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    30                                           @profile
+    31                                           def train_one_epoch(args, agent: Agent, phn: PHN, critic_phn: PHN, opt, train_dataset, training_nondom_list, tb_writer, epoch, init_stage=False):
+    32                                           
+    33         4        742.1    185.5      0.0      train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
+    34         4          3.3      0.8      0.0      ld = 10 if init_stage else args.ld 
+    35         4          1.4      0.3      0.0      if training_nondom_list is None:
+    36         1        229.8    229.8      0.0          training_nondom_list = [None for i in range(len(train_dataset))]
+    37         4          1.7      0.4      0.0      cos_penalty_loss_list = []
+    38         4          1.2      0.3      0.0      hv_loss_list = []
+    39         4          1.2      0.3      0.0      spread_loss_list = []
+    40       132    1651752.6  12513.3      0.5      for _, batch in tqdm(enumerate(train_dataloader), desc=f'Training epoch {epoch}'):
+    41       128      68768.9    537.3      0.0          ray_list =  get_ray_list(args.num_ray, agent.device)
+    42                                                   # get solutions
+    43       128      80303.0    627.4      0.0          agent.train()
+    44       128     183183.5   1431.1      0.1          param_dict_list = generate_params(phn, ray_list)
+    45       128  140298053.1    1e+06     43.0          logprob_list, batch_f_list, _, training_nondom_list = solve_one_batch(agent, param_dict_list, batch, training_nondom_list)
+    46                                                   # get baseline/critic
+    47       128      55337.1    432.3      0.0          agent.eval()
+    48       128       2457.1     19.2      0.0          with torch.no_grad():
+    49       128     105119.9    821.2      0.0              crit_param_dict_list = generate_params(critic_phn, ray_list)
+    50       128   91497240.4 714822.2     28.0              _, greedy_batch_f_list, _, training_nondom_list = solve_one_batch(agent, crit_param_dict_list, batch, training_nondom_list)
+    51       128        263.3      2.1      0.0          idx_list = batch[0]
+    52       128   10258580.6  80145.2      3.1          hv_loss, cos_penalty_loss = compute_loss(logprob_list, training_nondom_list, idx_list, batch_f_list, greedy_batch_f_list, ray_list)
+    53       128     165613.9   1293.9      0.1          spread_loss = compute_spread_loss(logprob_list, training_nondom_list, idx_list, batch_f_list)
+    54       128    2746707.8  21458.7      0.8          final_loss = hv_loss - 0.01*spread_loss
+    55       128        107.8      0.8      0.0          if init_stage:
+    56        32        251.8      7.9      0.0              final_loss = 0
+    57       128      10467.1     81.8      0.0          final_loss -= ld*cos_penalty_loss
+    58       128   79113390.2 618073.4     24.2          update_phn(agent, phn, opt, final_loss)
+    59       128       6680.8     52.2      0.0          hv_loss_list += [hv_loss.detach().cpu().numpy()]
+    60       128       2940.1     23.0      0.0          spread_loss_list += [spread_loss.detach().cpu().numpy()]
+    61       128       2822.8     22.1      0.0          cos_penalty_loss_list += [cos_penalty_loss.detach().cpu().numpy()]
+    62         4        611.2    152.8      0.0      hv_loss_list = np.array(hv_loss_list)
+    63         4        546.2    136.5      0.0      spread_loss_list = np.array(spread_loss_list)
+    64         4        535.6    133.9      0.0      cos_penalty_loss_list = np.array(cos_penalty_loss_list)
+    65         4       2952.0    738.0      0.0      plot_training_progress(tb_writer, epoch, hv_loss_list, spread_loss_list, cos_penalty_loss_list)
+    66         4          2.4      0.6      0.0      return training_nondom_list  
+
