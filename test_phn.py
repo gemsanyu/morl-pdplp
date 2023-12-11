@@ -87,9 +87,9 @@ def run(args):
 
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(1)
+    torch.set_num_threads(20)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
-    numba.set_num_threads(1)
+    numba.set_num_threads(20)
     run(args)
