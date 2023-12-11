@@ -36,6 +36,7 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     logprob_list = []
     things_to_write = ""
     for i, param_dict in enumerate(param_dict_list):
+        print(i)
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
         tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, sum_logprobs, sum_entropies = solve_results
         f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
@@ -51,6 +52,7 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
             things_to_write += tour_str
             # x_file.write(tour_str+"\n")
     x_file.write(things_to_write)
+    print("written x")
         # for departure_time in departure_time_list[0]:
         #     departure_time_str = ""
         #     for dt in departure_time:
