@@ -34,17 +34,24 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     decode_start = time.time()
     batch_f_list = [] 
     logprob_list = []
+    things_to_write = ""
     for i, param_dict in enumerate(param_dict_list):
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static, param_dict)
         tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, sum_logprobs, sum_entropies = solve_results
         f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
         batch_f_list += [f_list]
-        x_file.write(str(i)+" "+str(len(tour_list[0]))+"\n")
+        things_to_write = ""
+        header = str(i)+" "+str(len(tour_list[0]))+"\n"
+        things_to_write += header
+        # x_file.write()
         for tour in tour_list[0]:
             tour_str = ""
             for node in tour:
                 tour_str += str(node) + " "
-            x_file.write(tour_str+"\n")
+            tour_str += "\n"
+            things_to_write += tour_str
+            # x_file.write(tour_str+"\n")
+    x_file.write(things_to_write)
         # for departure_time in departure_time_list[0]:
         #     departure_time_str = ""
         #     for dt in departure_time:
@@ -52,7 +59,7 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
         #     x_file.write((departure_time_str + "\n"))
 
 
-        logprob_list += [sum_logprobs.unsqueeze(1)]
+    logprob_list += [sum_logprobs.unsqueeze(1)]
     batch_f_list = np.concatenate(batch_f_list, axis=1)
     logprob_list = torch.cat(logprob_list, dim=1)
     decode_duration = time.time()-decode_start
@@ -61,10 +68,13 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     
 
     # now write to corresponding file
+    things_to_write = ""
     for f in batch_f_list[0,:]:
         travel_cost_str ="{:.16f}".format(f[0])
         late_penalty_str="{:.16f}".format(f[1])
-        y_file.write((travel_cost_str +" "+late_penalty_str+"\n"))
+        y_line = travel_cost_str +" "+late_penalty_str+"\n"
+        things_to_write += y_line
+    y_file.write(things_to_write)
 
     # print x? apanya yang diprint....
     total_duration = "{:.16f}".format(total_duration)
@@ -87,9 +97,9 @@ def run(args):
 
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(20)
+    torch.set_num_threads(16)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
-    numba.set_num_threads(20)
+    numba.set_num_threads(16)
     run(args)
