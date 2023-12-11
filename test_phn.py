@@ -40,7 +40,6 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
         tour_list, arrived_time_list, departure_time_list, travel_costs, late_penalties, reward_list, sum_logprobs, sum_entropies = solve_results
         f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
         batch_f_list += [f_list]
-        things_to_write = ""
         header = str(i)+" "+str(len(tour_list[0]))+"\n"
         things_to_write += header
         # x_file.write()
