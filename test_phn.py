@@ -34,7 +34,7 @@ def test(agent:Agent, test_batch, x_file, y_file, t_file, num_ray=200):
     decode_start = time.time()
     batch_f_list = [] 
     logprob_list = []
-    for ray in ray_list:
+    for i, ray in enumerate(ray_list):
         agent.get_param_dict(ray)
         fixed_context = F.linear(graph_embeddings, agent.pf_weight)
         projected_embeddings = F.linear(node_embeddings, agent.pe_weight)
@@ -42,7 +42,13 @@ def test(agent:Agent, test_batch, x_file, y_file, t_file, num_ray=200):
         glimpse_K_static = agent._make_heads(glimpse_K_static)
         glimpse_V_static = agent._make_heads(glimpse_V_static)
         solve_results = solve_decode_only(agent, env, node_embeddings, fixed_context, glimpse_K_static, glimpse_V_static, logits_K_static)
-        _, _, _, travel_costs, late_penalties, _, sum_logprobs, _ = solve_results
+        tour_list, _, _, travel_costs, late_penalties, _, sum_logprobs, _ = solve_results
+        x_file.write(str(i)+" "+str(len(tour_list[0]))+"\n")
+        for tour in tour_list[0]:
+            tour_str = ""
+            for node in tour:
+                tour_str += str(node) + " "
+            x_file.write(tour_str+"\n")
         f_list = np.concatenate([travel_costs[:,np.newaxis,np.newaxis], late_penalties[:,np.newaxis,np.newaxis]], axis=2)
         batch_f_list += [f_list]
         logprob_list += [sum_logprobs.unsqueeze(1)]
