@@ -4,7 +4,7 @@ import numpy as np
 import numba as nb
 
 
-@nb.jit(nb.int64[:](nb.float32[:,:],nb.float32[:]),nopython=True,cache=True,parallel=True)
+# @nb.jit(nb.int64[:](nb.float32[:,:],nb.float32[:]),nopython=True,cache=True,parallel=True)
 def find_passed_hz(time_horizons, current_times):
     passed_hz = np.empty(len(current_times), dtype=np.int64)
     _, n_hz = time_horizons.shape
@@ -16,7 +16,7 @@ def find_passed_hz(time_horizons, current_times):
                 break
     return passed_hz
 
-@nb.jit(nb.float32(nb.float32, nb.float32, nb.int64, nb.float32[:], nb.float32[:]), cache=True, nopython=True)
+# @nb.jit(nb.float32(nb.float32, nb.float32, nb.int64, nb.float32[:], nb.float32[:]), cache=True, nopython=True)
 def compute_travel_time(distance, current_time, horizon, time_horizon, speed_profile):
     temp_time = current_time
     arrived_time = temp_time
@@ -34,7 +34,7 @@ def compute_travel_time(distance, current_time, horizon, time_horizon, speed_pro
     travel_time = arrived_time-current_time
     return travel_time
 
-@nb.jit(nb.float32[:](nb.float32[:], nb.float32[:],  nb.float32[:,:], nb.float32[:,:]), cache=True, nopython=True, parallel=True)
+# @nb.jit(nb.float32[:](nb.float32[:], nb.float32[:],  nb.float32[:,:], nb.float32[:,:]), cache=True, nopython=True, parallel=True)
 def compute_travel_time_loop(distances, current_times, time_horizons, speed_profiles):
     travel_times = np.empty(len(current_times), dtype=np.float32)
     horizons = find_passed_hz(time_horizons, current_times) - 1

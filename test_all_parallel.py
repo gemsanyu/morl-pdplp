@@ -84,5 +84,5 @@ if __name__ == "__main__":
                         "poa-n400-6",
                     ]
     num_vehicles_list = [1,3,5,10]
-    num_vehicles_list = [1]
+    # num_vehicles_list = [1]
     test_all_parallel(instances_name_list, num_vehicles_list, title, num_ray)

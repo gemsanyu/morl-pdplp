@@ -74,7 +74,7 @@ def read_time_horizons(time_horizons_path):
             time_horizons = [0,0.2,0.3,0.4,0.5,0.6,0.7,1000]
         with open(time_horizons_path.absolute(), "w") as time_horizons_file:
             line = ""
-            for i in range(n_time_horizons):
+            for i in range(len(time_horizons)):
                 line += str(time_horizons[i]) + " "
             time_horizons_file.write(line+"\n")
     else:

@@ -21,8 +21,8 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
     total_start = time.time()
     ray_list =  get_ray_list(num_ray, agent.device, is_random=False)
     param_dict_list = generate_params(phn, ray_list)
-    idx, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types = test_batch
-    env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
+    idx, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types, speed_profiles, time_horizons = test_batch
+    env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types, speed_profiles, time_horizons)
     static_features,_,_,_ = env.begin()
     encode_start = time.time()
     static_features = torch.from_numpy(static_features).to(agent.device)
@@ -66,7 +66,6 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
 
 def run(args):
     agent, phn, critic_phn, _, _, _, _, _, test_batch, _, _ = setup_phn(args, validation=True)
-    exit()
     result_dir = pathlib.Path(".")/"result"/args.title
     result_dir.mkdir(parents=True, exist_ok=True)
     title = args.test_instance_name +"-"+str(args.test_num_vehicles) + "-" + args.title
