@@ -1,5 +1,6 @@
 import os
 import pathlib
+import random
 
 import numpy as np
 import pickle
@@ -49,6 +50,68 @@ def read_instance(instance_path):
             for j in range(num_nodes):
                 distance_matrix[idx,j] = float(strings[j])
     return num_nodes, planning_time, max_capacity, coords, demands, time_windows, service_durations, distance_matrix
+
+def read_road_info(instance_name, num_nodes):
+    road_types_path = pathlib.Path(".")/"dataset"/"test"/(instance_name+".road_types")
+    road_types =read_road_types(road_types_path, num_nodes)
+    time_horizons_path = pathlib.Path(".")/"dataset"/"test"/(instance_name+".time_horizons")
+    time_horizons = read_time_horizons(time_horizons_path)
+    n_time_horizons = len(time_horizons)-1
+    speed_profiles_path = pathlib.Path(".")/"dataset"/"test"/(instance_name+".speed_profiles")
+    speed_profiles = read_speed_profiles(speed_profiles_path, n_time_horizons)
+    return road_types, time_horizons, speed_profiles
+
+def read_time_horizons(time_horizons_path):
+    time_horizons = None
+    if not os.path.isfile(time_horizons_path.absolute()):
+        time_horizons_list = [3,5,7]
+        n_time_horizons = random.choice(time_horizons_list)
+        if n_time_horizons==3:
+            time_horizons = [0,0.3,0.7,1000]
+        elif n_time_horizons==5:
+            time_horizons = [0,0.2,0.3,0.7,0.8,1000]
+        else:
+            time_horizons = [0,0.2,0.3,0.4,0.5,0.6,0.7,1000]
+        with open(time_horizons_path.absolute(), "w") as time_horizons_file:
+            line = ""
+            for i in range(n_time_horizons):
+                line += str(time_horizons[i]) + " "
+            time_horizons_file.write(line+"\n")
+    else:
+        with open(time_horizons_path.absolute(), "r") as road_types_file:
+            lines = road_types_file.readlines()
+            line = lines[0]
+            line = line.split()
+            time_horizons = [float(th) for th in line]
+
+    time_horizons = np.asanyarray(time_horizons, dtype=np.float32)
+    return time_horizons
+
+def read_speed_profiles(speed_profiles_path, n_time_horizons):
+    speed_profiles = None
+    if not os.path.isfile(speed_profiles_path.absolute()):
+        speed_profiles = [[],[],[]]
+        for i in range(3):
+            for _ in range(n_time_horizons):
+                r = random.random()+0.5
+                speed_profiles[i]+=[r]
+        with open(speed_profiles_path.absolute(), "w") as speed_profiles_file:
+            for i in range(3):
+                line = ""
+                for j in range(n_time_horizons):
+                    line += str(speed_profiles[i][j]) + " "
+                speed_profiles_file.write(line+"\n")
+    else:
+        with open(speed_profiles_path.absolute(), "r") as speed_profiles_file:
+            speed_profiles = []
+            lines = speed_profiles_file.readlines()
+            for line in lines:
+                speed_profile = [float(sp) for sp in line.split()]
+                speed_profiles += [speed_profile]
+            
+    speed_profiles = np.asanyarray(speed_profiles, dtype=np.float32)
+    return speed_profiles
+
 
 def read_road_types(road_types_path, num_nodes):
     road_types = np.zeros((num_nodes,num_nodes), dtype=np.int8)

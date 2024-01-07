@@ -66,6 +66,7 @@ def test(agent, phn, test_batch, x_file, y_file, t_file, num_ray=200):
 
 def run(args):
     agent, phn, critic_phn, _, _, _, _, _, test_batch, _, _ = setup_phn(args, validation=True)
+    exit()
     result_dir = pathlib.Path(".")/"result"/args.title
     result_dir.mkdir(parents=True, exist_ok=True)
     title = args.test_instance_name +"-"+str(args.test_num_vehicles) + "-" + args.title
