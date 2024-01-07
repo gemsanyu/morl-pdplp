@@ -3,14 +3,12 @@ import time
 import numpy as np
 import numba as nb
 
-from bpdplp.bpdplp import TIME_HORIZONS, SPEED_PROFILES
-
-@nb.jit(nb.int64[:](nb.float32[:,:],nb.float32[:]),nopython=True,cache=True,parallel=True)
+@nb.jit(nb.int64[:](nb.float32[:,:],nb.float32[:]),nopython=True,cache=True)
 def find_passed_hz(time_horizons, current_times):
     passed_hz = np.empty(len(current_times), dtype=np.int64)
     _, n_hz = time_horizons.shape
     l_ct = len(current_times)
-    for i in nb.prange(l_ct):
+    for i in range(l_ct):
         for j in range(n_hz):
             if time_horizons[i,j] > current_times[i]:
                 passed_hz[i] = j
@@ -35,11 +33,11 @@ def compute_travel_time(distance, current_time, horizon, time_horizon, speed_pro
     travel_time = arrived_time-current_time
     return travel_time
 
-@nb.jit(nb.float32[:](nb.float32[:], nb.float32[:],  nb.float32[:,:], nb.float32[:,:]), cache=True, nopython=True, parallel=True)
+@nb.jit(nb.float32[:](nb.float32[:], nb.float32[:],  nb.float32[:,:], nb.float32[:,:]), cache=True, nopython=True)
 def compute_travel_time_loop(distances, current_times, time_horizons, speed_profiles):
     travel_times = np.empty(len(current_times), dtype=np.float32)
     horizons = find_passed_hz(time_horizons, current_times) - 1
-    for i in nb.prange(len(current_times)):
+    for i in range(len(current_times)):
         travel_times[i] = compute_travel_time(distances[i],current_times[i], horizons[i],time_horizons[i,:],speed_profiles[i,:])
     return travel_times    
 
@@ -63,7 +61,9 @@ class BPDPLP_Env(object):
                  norm_service_durations, 
                  distance_matrix, 
                  norm_distance_matrix, 
-                 road_types) -> None:
+                 road_types,
+                 speed_profiles,
+                 time_horizons) -> None:
         
         self.num_vehicles = num_vehicles.numpy()
         self.num_vehicles_cum = np.insert(np.cumsum(self.num_vehicles),0,0)
@@ -85,13 +85,15 @@ class BPDPLP_Env(object):
         self.distance_matrix = distance_matrix.numpy().astype(np.float32)
         self.norm_distance_matrix = norm_distance_matrix.numpy()
         self.road_types = road_types.numpy()
+        self.speed_profiles = speed_profiles.numpy()
+        self.time_horizons = time_horizons.numpy()
         
         #for travel time computation
         planning_time_repeated = self.planning_time[:,np.newaxis,np.newaxis]
         planning_time_repeated = np.repeat(planning_time_repeated, self.max_num_vehicles, 1)
         planning_time_repeated = np.repeat(planning_time_repeated, self.num_nodes, 2)
         planning_time_repeated = planning_time_repeated.ravel()
-        self.time_horizons_repeated = TIME_HORIZONS*planning_time_repeated[:, np.newaxis]
+        self.time_horizons_repeated = self.time_horizons*planning_time_repeated[:, np.newaxis]
         #repeat-use variables
         self.is_depot_feasible = np.asanyarray([[[False]]*self.max_num_vehicles]*self.batch_size)
         self.vehicle_idx = np.arange(self.max_num_vehicles)[np.newaxis,:,np.newaxis]
@@ -156,7 +158,7 @@ class BPDPLP_Env(object):
         current_time_list = np.repeat(current_time_list,self.num_nodes,axis=2).ravel()
         time_horizon_list = self.time_horizons_repeated
         road_types_list = self.road_types[self.batch_vec_idx, current_location_idx,:].ravel()
-        speed_profile_list = np.take(SPEED_PROFILES,road_types_list,axis=0)
+        speed_profile_list = np.take(self.speed_profiles,road_types_list,axis=0)
         
         # passed_hz = find_passed_hz(time_horizon_list, current_time_list) - 1
         # passed_hz_compact = self.current_horizons

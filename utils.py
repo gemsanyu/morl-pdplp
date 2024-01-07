@@ -32,9 +32,11 @@ def instance_to_batch(instance:BPDPLP):
     max_capacity = torch.tensor([float(instance.max_capacity)])
     num_vehicles = torch.tensor([instance.num_vehicles])
     planning_time = torch.tensor([float(instance.planning_time)])
+    speed_profiles = torch.tensor(instance.speed_profiles)
+    time_horizons = torch.tensor(instance.time_horizons)
     # env = BPDPLP_Env(num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time , time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types)
     # return env
-    return 0, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types
+    return 0, num_vehicles, max_capacity, coords, norm_coords, demands, norm_demands, planning_time, time_windows, norm_time_windows, service_durations, norm_service_durations, distance_matrix, norm_distance_matrix, road_types, speed_profiles, time_horizons 
     
 
 def encode(agent, static_features, param_dict=None):

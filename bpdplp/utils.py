@@ -1,10 +1,11 @@
 import os
 import pathlib
+import random
 
 import numpy as np
 import pickle
 from sklearn.cluster import KMeans
-from sklearn.metrics.pairwise import haversine_distances, pairwise_distances
+from sklearn.metrics.pairwise import haversine_distances
 
 # road types
 SLOW=0
@@ -49,6 +50,68 @@ def read_instance(instance_path):
             for j in range(num_nodes):
                 distance_matrix[idx,j] = float(strings[j])
     return num_nodes, planning_time, max_capacity, coords, demands, time_windows, service_durations, distance_matrix
+
+def read_road_info(instance_name, num_nodes):
+    road_types_path = pathlib.Path(".")/"dataset"/"test"/(instance_name+".road_types")
+    road_types =read_road_types(road_types_path, num_nodes)
+    time_horizons_path = pathlib.Path(".")/"dataset"/"test"/(instance_name+".time_horizons")
+    time_horizons = read_time_horizons(time_horizons_path)
+    n_time_horizons = len(time_horizons)-1
+    speed_profiles_path = pathlib.Path(".")/"dataset"/"test"/(instance_name+".speed_profiles")
+    speed_profiles = read_speed_profiles(speed_profiles_path, n_time_horizons)
+    return road_types, time_horizons, speed_profiles
+
+def read_time_horizons(time_horizons_path):
+    time_horizons = None
+    if not os.path.isfile(time_horizons_path.absolute()):
+        time_horizons_list = [3,5,7]
+        n_time_horizons = random.choice(time_horizons_list)
+        if n_time_horizons==3:
+            time_horizons = [0,0.3,0.7,1000]
+        elif n_time_horizons==5:
+            time_horizons = [0,0.2,0.3,0.7,0.8,1000]
+        else:
+            time_horizons = [0,0.2,0.3,0.4,0.5,0.6,0.7,1000]
+        with open(time_horizons_path.absolute(), "w") as time_horizons_file:
+            line = ""
+            for i in range(len(time_horizons)):
+                line += str(time_horizons[i]) + " "
+            time_horizons_file.write(line+"\n")
+    else:
+        with open(time_horizons_path.absolute(), "r") as road_types_file:
+            lines = road_types_file.readlines()
+            line = lines[0]
+            line = line.split()
+            time_horizons = [float(th) for th in line]
+
+    time_horizons = np.asanyarray(time_horizons, dtype=np.float32)
+    return time_horizons
+
+def read_speed_profiles(speed_profiles_path, n_time_horizons):
+    speed_profiles = None
+    if not os.path.isfile(speed_profiles_path.absolute()):
+        speed_profiles = [[],[],[]]
+        for i in range(3):
+            for _ in range(n_time_horizons):
+                r = random.random()+0.5
+                speed_profiles[i]+=[r]
+        with open(speed_profiles_path.absolute(), "w") as speed_profiles_file:
+            for i in range(3):
+                line = ""
+                for j in range(n_time_horizons):
+                    line += str(speed_profiles[i][j]) + " "
+                speed_profiles_file.write(line+"\n")
+    else:
+        with open(speed_profiles_path.absolute(), "r") as speed_profiles_file:
+            speed_profiles = []
+            lines = speed_profiles_file.readlines()
+            for line in lines:
+                speed_profile = [float(sp) for sp in line.split()]
+                speed_profiles += [speed_profile]
+            
+    speed_profiles = np.asanyarray(speed_profiles, dtype=np.float32)
+    return speed_profiles
+
 
 def read_road_types(road_types_path, num_nodes):
     road_types = np.zeros((num_nodes,num_nodes), dtype=np.int8)
@@ -125,11 +188,9 @@ def sample_cluster_from_graph(num_nodes, num_cluster, coords, haversine_matrix, 
     
     return clusters
 
-def generate_graph(graph_seed=None, num_nodes=10, num_cluster=1, cluster_delta=1, distribution=RANDOM, depot_location=RANDOM, li_lim=False):
-    if graph_seed is not None:
-        coords_L, distance_matrix_L, haversine_matrix_L = graph_seed
-    else:
-        coords_L, distance_matrix_L, haversine_matrix_L = get_random_graph(1000)
+
+def generate_graph(graph_seed, num_nodes, num_cluster, cluster_delta, distribution, depot_location):
+    coords_L, distance_matrix_L, haversine_matrix_L = graph_seed
     num_nodes_L = len(coords_L)
     chosen_nodes_idx = None
     if distribution == RANDOM:
@@ -165,12 +226,9 @@ def generate_graph(graph_seed=None, num_nodes=10, num_cluster=1, cluster_delta=1
             max_coords_clusters = [np.max(coords_L[cluster], axis=0, keepdims=True) for cluster in odd_clusters]
             central_coords_clusters = [(min_coords_clusters[i]+max_coords_clusters[i])/2 for i in range(len(odd_clusters))]
             central_coords_clusters = np.concatenate(central_coords_clusters, axis=0)
-            if not li_lim:
-                distance_from_bigger_to_centrals = haversine_distances(coords_L[largest_cluster], central_coords_clusters)
-            else:
-                distance_from_bigger_to_centrals = pairwise_distances(coords_L[largest_cluster], central_coords_clusters)
+            haversine_from_bigger_to_centrals = haversine_distances(coords_L[largest_cluster], central_coords_clusters)
             # get the node idx to move and move it
-            idx_to_move = np.argmin(distance_from_bigger_to_centrals)
+            idx_to_move = np.argmin(haversine_from_bigger_to_centrals)
             cluster_to_move_into_idx = int(idx_to_move/len(largest_cluster))
             node_idx_to_move_idx = idx_to_move%len(largest_cluster)
             node_idx_to_move = largest_cluster[node_idx_to_move_idx]
@@ -204,10 +262,7 @@ def generate_graph(graph_seed=None, num_nodes=10, num_cluster=1, cluster_delta=1
         min_coords, max_coords = np.min(chosen_nodes_coords, axis=0, keepdims=True), np.max(chosen_nodes_coords, axis=0, keepdims=True)
         center_coords = (min_coords+max_coords)/2
         remaining_coords = coords_L[remaining_nodes_idx]
-        if not li_lim:
-            distance_to_center = haversine_distances(remaining_coords, center_coords)
-        else:
-            distance_to_center = pairwise_distances(remaining_coords, center_coords)
+        distance_to_center = haversine_distances(remaining_coords, center_coords)
         chosen_depot_idx_ = np.argmin(distance_to_center, keepdims=True).squeeze(0)
         chosen_depot_idx = remaining_nodes_idx[chosen_depot_idx_]
         chosen_nodes_idx = np.concatenate([chosen_depot_idx, chosen_nodes_idx], axis=0)
@@ -217,7 +272,7 @@ def generate_graph(graph_seed=None, num_nodes=10, num_cluster=1, cluster_delta=1
     haversine_matrix = haversine_matrix_L[chosen_nodes_idx, :][:, chosen_nodes_idx]
     return coords, distance_matrix
     
-def generate_time_windows(num_requests, planning_time, time_windows_length, service_durations, distance_matrix, li_lim=False):
+def generate_time_windows(num_requests, planning_time, time_windows_length, service_durations, distance_matrix):
     pickup_nodes_idx = np.arange(num_requests) + 1
     delivery_nodes_idx = pickup_nodes_idx + num_requests
     pickup_delivery_distance = distance_matrix[pickup_nodes_idx, delivery_nodes_idx]
@@ -257,7 +312,3 @@ def generate_time_windows(num_requests, planning_time, time_windows_length, serv
     time_windows = np.insert(time_windows, 0, [0, planning_time], axis=0)
     return time_windows
 
-def get_random_graph(num_nodes=1000):
-    coords = np.random.rand(num_nodes,2) * 100
-    distance_matrix = pairwise_distances(coords)
-    return coords, distance_matrix, distance_matrix 
