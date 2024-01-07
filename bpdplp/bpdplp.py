@@ -3,11 +3,8 @@ import pathlib
 
 import numpy as np
 
-from bpdplp.utils import generate_graph, read_instance, read_road_types, generate_time_windows
+from bpdplp.utils import generate_graph, read_instance, read_road_info, generate_time_windows
 from bpdplp.utils import RANDOM, RANDOMCLUSTER, CLUSTER, CENTRAL
-
-TIME_HORIZONS = np.asanyarray([0,0.2,0.3,0.7,0.8,1000], dtype=np.float32)
-SPEED_PROFILES = np.asanyarray([[1.5, 1, 1.67, 1.17, 1.33],[1.17, 0.67, 1.33, 0.83, 1],[1, 0.33, 0.67, 0.5, 0.83]], dtype=np.float32)
 
 class BPDPLP(object):
     def __init__(self, 
@@ -43,11 +40,10 @@ class BPDPLP(object):
             
     def read_instance(self):
         instance_path = pathlib.Path(".")/"dataset"/"test"/(self.instance_name+".txt")
-        road_types_path = pathlib.Path(".")/"dataset"/"test"/(self.instance_name+".road_types")
         instance = read_instance(instance_path)
         self.num_nodes, self.planning_time, self.max_capacity, self.coords, self.demands, self.time_windows, self.service_durations, self.distance_matrix = instance
-        self.road_types = read_road_types(road_types_path, self.num_nodes)
-
+        self.road_types, self.time_horizons, self.speed_profiles = read_road_info(self.instance_name, self.num_nodes)
+        
         #normalize all
     def normalize(self):
         self.norm_demands = self.demands / self.max_capacity
