@@ -6,8 +6,6 @@ def test_proc(instance_name, num_vehicles, title, num_ray):
                     "test_phn.py",
                     "--test-instance-name",
                     instance_name,
-                    "--device",
-                    "cuda",
                     "--test-num-vehicles",
                     str(num_vehicles),
                     "--title",
@@ -20,7 +18,7 @@ def test_all_parallel(instances_name_list, num_vehicles_list, title, num_ray):
     config_list = [(instance_name, num_vehicles, title, num_ray) for instance_name in instances_name_list for num_vehicles in num_vehicles_list]
     # for config in config_list:
     #     test_proc(config[0], config[1], config[2], config[3])
-    with mp.Pool(20) as pool:
+    with mp.Pool(14) as pool:
        pool.starmap(test_proc, config_list)
     # for config in config_list:
     #     test(*config)
