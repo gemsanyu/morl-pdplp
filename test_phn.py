@@ -35,6 +35,7 @@ def test(agent:Agent, test_batch, x_file, y_file, t_file, num_ray=200):
     batch_f_list = [] 
     logprob_list = []
     for i, ray in enumerate(ray_list):
+        print(i)
         agent.get_param_dict(ray)
         fixed_context = F.linear(graph_embeddings, agent.pf_weight)
         projected_embeddings = F.linear(node_embeddings, agent.pe_weight)
@@ -85,9 +86,9 @@ def run(args):
 
 if __name__ == "__main__":
     args = prepare_args()
-    torch.set_num_threads(8)
+    torch.set_num_threads(1)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
-    numba.set_num_threads(8)
+    numba.set_num_threads(1)
     run(args)
